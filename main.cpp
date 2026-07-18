@@ -34,6 +34,7 @@
 //17/02/26 00:02:停止开发
 //13/06/26 12:06:恢复开发
 //18/06/26 19:56:DEBUG版本 
+//18/07/26 11:24:新的启动动画（未加入音乐、图片，就是目前有bug) 
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
@@ -45,6 +46,12 @@
 #include <algorithm>
 #include <mmsystem.h>
 #include <imm.h>
+
+#include <math.h>
+#include <mmsystem.h>
+#include <stdlib.h>
+#include <time.h>
+#pragma comment(lib, "winmm.lib")
 
 // 添加兼容性定义
 #ifndef CP_ACP
@@ -94,6 +101,61 @@
 #define SETTINGS_BG RGB(250, 250, 255)
 
 using namespace std; // 使用std命名空间
+
+// ============================================================
+//  阳间版启动动画状态
+// ============================================================
+typedef struct {
+    float progress;
+    float letterProgress;
+    DWORD startTime;
+    DWORD lastFrameTime;
+    BOOL isFinished;
+    BOOL isLoading;
+    float loadProgress;
+    int loadTextIndex;
+    DWORD loadTextChangeTime;
+    float jellyX;
+    float jellyY;
+    float jellyAngle;
+    float jellyPulse;
+    float jellyAlpha;
+    float jellyScale;
+    float jellySpeed;
+    float letterOffsets[30];
+    BOOL hasEntered;
+    float entryX;
+    float entryY;
+    char quote[256];
+    DWORD quoteChangeTime;
+    BOOL isGoldMode;
+    BOOL isLoveDay;
+    BOOL isBirthday;
+    BOOL isBirthHour;
+    BOOL isSubmitDay;
+    BOOL isSoulHour;
+    BOOL isDoubleEgg;
+    BOOL showLoveQuestion;
+    BOOL showLovePhoto;
+    char loveInput[20];
+    int loveInputPos;
+    BOOL loveAnswered;
+    BOOL loveAnswerYes;
+    HBITMAP hPhoto;
+    BOOL photoLoaded;
+    char eggMsg[256];
+    DWORD eggMsgTime;
+    BOOL showEggMsg;
+    BOOL isBouncing;
+    float bounceStartY;
+    DWORD bounceStartTime;
+    int quoteIndex;
+    BOOL musicStarted;
+    int eggTriggerCount;
+} SunlightState;
+
+static SunlightState g_sunlight = {0};
+static BOOL g_useSunlightLauncher = TRUE;
 
 // ==================== DEBUG版本定义 ====================
 #define _DEBUG 1
@@ -1502,6 +1564,715 @@ void CreateEthernetBackground(HWND hwnd) {\
 }\
 //废弃代码完 
 
+// ============================================================
+//  阳间版启动动画 - 完整实现
+// ============================================================
+
+static float sl_easeOutBack(float t) {
+    float c1 = 1.70158f;
+    float c3 = c1 + 1;
+    return 1 + c3 * powf(t - 1, 3) + c1 * powf(t - 1, 2);
+}
+
+static float sl_clampf(float v, float mn, float mx) {
+    if (v < mn) return mn;
+    if (v > mx) return mx;
+    return v;
+}
+
+static int sl_GetTextWidth(HDC hdc, const char* text) {
+    RECT r = {0, 0, 0, 0};
+    DrawTextA(hdc, text, -1, &r, DT_CALCRECT);
+    return r.right - r.left;
+}
+
+static void sl_DrawJellyfish(HDC hdc, int cx, int cy, int size, float angle, float pulse, float alpha, BOOL isGold, float scale) {
+    if (alpha < 0.01f) return;
+    int s = (int)(size * scale);
+    HPEN hOldPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
+    SetBkMode(hdc, TRANSPARENT);
+    
+    COLORREF body, glow, tentacle;
+    if (isGold) {
+        body = RGB(251, 191, 36);
+        glow = RGB(252, 211, 77);
+        tentacle = RGB(218, 165, 32);
+    } else {
+        body = RGB(139, 92, 246);
+        glow = RGB(167, 139, 250);
+        tentacle = RGB(120, 80, 200);
+    }
+    
+    int gs = s + 20 + (int)(8 * sin(pulse));
+    HBRUSH hg = CreateSolidBrush(glow);
+    HPEN hpg = CreatePen(PS_SOLID, 1, glow);
+    SelectObject(hdc, hpg);
+    SelectObject(hdc, hg);
+    Ellipse(hdc, cx - gs/2, cy - s/3 - 10, cx + gs/2, cy + s/3 + 10);
+    DeleteObject(hg);
+    DeleteObject(hpg);
+    
+    HBRUSH hb = CreateSolidBrush(body);
+    SelectObject(hdc, hb);
+    Ellipse(hdc, cx - s/2, cy - s/3, cx + s/2, cy + s/3);
+    DeleteObject(hb);
+    
+    HBRUSH hi = CreateSolidBrush(RGB(255, 255, 255));
+    SelectObject(hdc, hi);
+    Ellipse(hdc, cx - s/5, cy - s/5, cx + s/5, cy);
+    DeleteObject(hi);
+    
+    HPEN hpt = CreatePen(PS_SOLID, 2, tentacle);
+    SelectObject(hdc, hpt);
+    float t = pulse * 2;
+    for (int i = 0; i < 10; i++) {
+        float a = 2 * 3.14159f * i / 10 + angle;
+        int sx = cx + (int)(s/3 * cos(a));
+        int sy = cy + s/4 + (int)(s/6 * sin(a));
+        MoveToEx(hdc, sx, sy, NULL);
+        for (int j = 0; j <= 60; j += 4) {
+            float p = j / 60.0f;
+            float w = sin(t * 3 + i * 0.6 + p * 8) * (1 - p) * 20;
+            int px = sx + (int)(s * 0.5 * cos(a) * p);
+            int py = sy + (int)(s * 0.7 * p);
+            LineTo(hdc, px + (int)(w * cos(a + 1.57)), py + (int)(w * sin(a + 1.57)));
+        }
+    }
+    DeleteObject(hpt);
+    SelectObject(hdc, hOldPen);
+}
+
+static void sl_DrawBouncingLetters(HDC hdc, int cx, int cy, const char* text, float progress, BOOL isGold, float* offsets) {
+    HFONT hf = CreateFont(48, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial Black");
+    HFONT hof = (HFONT)SelectObject(hdc, hf);
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, isGold ? RGB(251, 191, 36) : RGB(255, 255, 255));
+    
+    int len = (int)strlen(text);
+    int tw[30] = {0};
+    int total = 0;
+    for (int i = 0; i < len; i++) {
+        char ch[2] = {text[i], 0};
+        tw[i] = sl_GetTextWidth(hdc, ch);
+        total += tw[i];
+    }
+    int spacing = 2;
+    int startX = cx - total / 2 - (len - 1) * spacing / 2;
+    
+    float delay = 0.08f;
+    for (int i = 0; i < len; i++) {
+        float st = i * delay;
+        float et = st + 0.3f;
+        float t = sl_clampf((progress - st) / (et - st), 0, 1);
+        if (t <= 0) continue;
+        
+        float eased = sl_easeOutBack(t);
+        float offY = (1 - eased) * 60;
+        float sc = 1 + (1 - eased) * 0.2;
+        char ch[2] = {text[i], 0};
+        int baseW = tw[i];
+        int w = (int)(baseW * sc);
+        int hh = (int)(48 * sc);
+        
+        RECT r = {
+            startX + i * (baseW + spacing) - (w - baseW)/2,
+            cy - 24 + (int)offY - (hh - 48)/2,
+            startX + i * (baseW + spacing) + (w - baseW)/2 + w,
+            cy - 24 + (int)offY + (hh - 48)/2 + 48
+        };
+        
+        if (isGold && t > 0.8f) {
+            HBRUSH hg = CreateSolidBrush(RGB(255, 220, 100));
+            HPEN hpg = CreatePen(PS_SOLID, 1, RGB(255, 220, 100));
+            SelectObject(hdc, hpg);
+            SelectObject(hdc, hg);
+            Ellipse(hdc, r.left - 5, r.top - 5, r.right + 5, r.bottom + 5);
+            DeleteObject(hg);
+            DeleteObject(hpg);
+        }
+        
+        if (offsets) offsets[i] = offY;
+        DrawTextA(hdc, ch, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+    SelectObject(hdc, hof);
+    DeleteObject(hf);
+}
+
+static void sl_DrawPhoto(HDC hdc, int cx, int cy, HBITMAP hPhoto) {
+    RECT rect = {cx - 300, cy - 250, cx + 300, cy + 250};
+    HBRUSH hm = CreateSolidBrush(RGB(0, 0, 0));
+    FillRect(hdc, &rect, hm);
+    DeleteObject(hm);
+    
+    SetBkMode(hdc, TRANSPARENT);
+    
+    HFONT htf = CreateFont(28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    HFONT hof = (HFONT)SelectObject(hdc, htf);
+    SetTextColor(hdc, RGB(255, 105, 180));
+    RECT tr = {cx - 200, cy - 220, cx + 200, cy - 170};
+    DrawTextA(hdc, "开发者照片", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hof);
+    DeleteObject(htf);
+    
+    if (hPhoto) {
+        BITMAP bm;
+        GetObject(hPhoto, sizeof(BITMAP), &bm);
+        int bw = bm.bmWidth;
+        int bh = bm.bmHeight;
+        int dw = bw, dh = bh;
+        if (dw > 300) { dh = dh * 300 / dw; dw = 300; }
+        if (dh > 300) { dw = dw * 300 / dh; dh = 300; }
+        
+        HDC hMemDC = CreateCompatibleDC(hdc);
+        HBITMAP hOldBmp = (HBITMAP)SelectObject(hMemDC, hPhoto);
+        int x = cx - dw/2;
+        int y = cy - dh/2 + 10;
+        HPEN hp = CreatePen(PS_SOLID, 3, RGB(255, 255, 255));
+        HPEN hop = (HPEN)SelectObject(hdc, hp);
+        HBRUSH hob = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+        Rectangle(hdc, x - 8, y - 8, x + dw + 8, y + dh + 8);
+        SelectObject(hdc, hop);
+        SelectObject(hdc, hob);
+        DeleteObject(hp);
+        SetStretchBltMode(hdc, HALFTONE);
+        StretchBlt(hdc, x, y, dw, dh, hMemDC, 0, 0, bw, bh, SRCCOPY);
+        SelectObject(hMemDC, hOldBmp);
+        DeleteDC(hMemDC);
+    } else {
+        HFONT hf = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+        hof = (HFONT)SelectObject(hdc, hf);
+        SetTextColor(hdc, RGB(255, 255, 255));
+        RECT pr = {cx - 150, cy - 20, cx + 150, cy + 20};
+        DrawTextA(hdc, "未找到照片文件", -1, &pr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(hf);
+    }
+    
+    HFONT hhf = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    hof = (HFONT)SelectObject(hdc, hhf);
+    SetTextColor(hdc, RGB(148, 163, 184));
+    RECT hr = {cx - 100, cy + 230, cx + 100, cy + 260};
+    DrawTextA(hdc, "按 ESC 返回", -1, &hr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hof);
+    DeleteObject(hhf);
+}
+
+static void sl_DrawLoveQuestion(HDC hdc, int cx, int cy) {
+    HBRUSH hm = CreateSolidBrush(RGB(0, 0, 0));
+    RECT full = {cx - 400, cy - 300, cx + 400, cy + 300};
+    FillRect(hdc, &full, hm);
+    DeleteObject(hm);
+    
+    SetBkMode(hdc, TRANSPARENT);
+    
+    HFONT htf = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    HFONT hof = (HFONT)SelectObject(hdc, htf);
+    SetTextColor(hdc, RGB(255, 105, 180));
+    RECT qr = {cx - 350, cy - 120, cx + 350, cy - 60};
+    DrawTextA(hdc, "f系统爱你，你爱我吗？", -1, &qr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hof);
+    DeleteObject(htf);
+    
+    HFONT hif = CreateFont(24, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    hof = (HFONT)SelectObject(hdc, hif);
+    SetTextColor(hdc, RGB(255, 255, 255));
+    RECT pr = {cx - 200, cy - 20, cx + 200, cy + 20};
+    DrawTextA(hdc, "请输入 yes 或 no：", -1, &pr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hof);
+    DeleteObject(hif);
+    
+    int bx = cx - 120;
+    int by = cy + 30;
+    int bw = 240;
+    int bh = 45;
+    HBRUSH hbb = CreateSolidBrush(RGB(255, 255, 255));
+    HPEN hbp = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
+    HPEN hop = (HPEN)SelectObject(hdc, hbp);
+    HBRUSH hob = (HBRUSH)SelectObject(hdc, hbb);
+    RoundRect(hdc, bx, by, bx + bw, by + bh, 8, 8);
+    SelectObject(hdc, hop);
+    SelectObject(hdc, hob);
+    DeleteObject(hbp);
+    DeleteObject(hbb);
+    
+    HFONT hif2 = CreateFont(26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+    hof = (HFONT)SelectObject(hdc, hif2);
+    SetTextColor(hdc, RGB(0, 0, 0));
+    RECT ir = {bx + 10, by + 5, bx + bw - 10, by + bh - 5};
+    DrawTextA(hdc, &g_sunlight.loveInput[0], -1, &ir, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    if ((GetTickCount() / 500) % 2 == 0) {
+        int iw = sl_GetTextWidth(hdc, &g_sunlight.loveInput[0]);
+        MoveToEx(hdc, bx + 10 + iw, by + 10, NULL);
+        LineTo(hdc, bx + 10 + iw, by + bh - 10);
+    }
+    SelectObject(hdc, hof);
+    DeleteObject(hif2);
+    
+    HFONT hhf = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    hof = (HFONT)SelectObject(hdc, hhf);
+    SetTextColor(hdc, RGB(148, 163, 184));
+    RECT hr = {cx - 150, cy + 100, cx + 150, cy + 130};
+    DrawTextA(hdc, "按 Enter 确认，按 Esc 取消", -1, &hr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hof);
+    DeleteObject(hhf);
+}
+
+static void sl_UpdateSunlightState(void) {
+    if (g_sunlight.isFinished) return;
+    
+    DWORD now = GetTickCount();
+    float dt = (now - g_sunlight.lastFrameTime) / 1000.0f;
+    g_sunlight.lastFrameTime = now;
+    DWORD elapsed = now - g_sunlight.startTime;
+    
+    // ============================================================
+    //  修复：水母速度控制
+    //  加载时 jellySpeed = 2.0，正常时 = 1.0
+    // ============================================================
+    float currentSpeed = g_sunlight.isLoading ? 1.2f : 1.0f;
+    
+    g_sunlight.jellyPulse += dt * 2.0f * currentSpeed;
+    g_sunlight.jellyAngle += dt * 0.4f * currentSpeed;
+    float floatOffset = sin(g_sunlight.jellyPulse) * 15;
+    
+    // 水母弹跳
+    if (g_sunlight.isBouncing) {
+        float be = (now - g_sunlight.bounceStartTime) / 1000.0f;
+        if (be < 0.8f) {
+            float t = be / 0.8f;
+            float height = (1 - (t - 1) * (t - 1)) * 60;
+            g_sunlight.jellyY = g_sunlight.bounceStartY - height + floatOffset;
+        } else {
+            g_sunlight.isBouncing = FALSE;
+            g_sunlight.jellyY = 300 + floatOffset;
+        }
+    }
+    
+    // ---- 阶段1: 黑屏 0-0.3s ----
+    if (elapsed < 300) {
+        g_sunlight.progress = 0;
+        g_sunlight.jellyAlpha = 0;
+        return;
+    }
+    
+    // ---- 阶段2: 水母浮现 0.3-0.8s ----
+    if (elapsed < 800) {
+        g_sunlight.progress = (elapsed - 300) / 500.0f;
+        g_sunlight.jellyAlpha = sl_clampf(g_sunlight.progress, 0, 1);
+        g_sunlight.jellyY = 400 - g_sunlight.progress * 100 + floatOffset * g_sunlight.progress;
+        g_sunlight.jellyScale = 0.7f + g_sunlight.progress * 0.3f;
+        return;
+    }
+    
+    // ---- 生日模式: 从右下角游入 ----
+    if (g_sunlight.isBirthday && !g_sunlight.hasEntered) {
+        float ep = (elapsed - 800) / 1500.0f;
+        if (ep < 1) {
+            float e = ep * ep * (3 - 2 * ep);
+            g_sunlight.entryX = 850 - e * 500;
+            g_sunlight.entryY = 550 - e * 250 + floatOffset * 0.5f;
+            g_sunlight.jellyX = g_sunlight.entryX;
+            g_sunlight.jellyY = g_sunlight.entryY;
+            g_sunlight.jellyAlpha = 0.5f + e * 0.5f;
+            g_sunlight.jellyScale = 0.8f + e * 0.2f;
+            g_sunlight.progress = 0.2f + ep * 0.2f;
+            return;
+        } else {
+            g_sunlight.hasEntered = TRUE;
+            g_sunlight.jellyX = 400;
+            g_sunlight.jellyY = 300 + floatOffset;
+            g_sunlight.jellyAlpha = 1;
+            g_sunlight.jellyScale = 1;
+        }
+    }
+    
+    // ---- 阶段3: Logo出现 0.8-1.3s ----
+    if (elapsed < 1300) {
+        g_sunlight.progress = 0.4f + (elapsed - 800) / 500.0f * 0.2f;
+        if (!g_sunlight.isBouncing) g_sunlight.jellyY = 300 + floatOffset;
+        g_sunlight.jellyAlpha = 1;
+        g_sunlight.jellyScale = 1;
+        return;
+    }
+    
+    // ---- 阶段4: 字母弹动 1.3-3.3s ----
+    if (elapsed < 3300) {
+        float lt = (elapsed - 1300) / 2000.0f;
+        g_sunlight.progress = 0.6f + lt * 0.2f;
+        g_sunlight.letterProgress = sl_clampf(lt, 0, 1);
+        if (!g_sunlight.isBouncing) g_sunlight.jellyY = 300 + floatOffset;
+        g_sunlight.jellyAlpha = 1;
+        g_sunlight.jellyScale = 1;
+        return;
+    }
+    
+    // ---- 阶段5: 启动器主界面 ----
+    g_sunlight.progress = 0.8f;
+    g_sunlight.letterProgress = 1.0f;
+    if (!g_sunlight.isBouncing) g_sunlight.jellyY = 300 + floatOffset;
+    g_sunlight.jellyAlpha = 1;
+    g_sunlight.jellyScale = 1;
+    
+    // 语录切换（每6秒）
+    if (now - g_sunlight.quoteChangeTime > 6000) {
+        const char* quotes[] = {
+            "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+            "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+            "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+            "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+            "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+        };
+        int idx = rand() % 15;
+        strcpy(g_sunlight.quote, quotes[idx]);
+        g_sunlight.quoteIndex = idx;
+        g_sunlight.quoteChangeTime = now;
+    }
+    
+    // ---- 加载阶段 ----
+    if (g_sunlight.isLoading) {
+        g_sunlight.loadProgress += dt * 25;  // 4秒走完
+        if (g_sunlight.loadProgress >= 100) {
+            g_sunlight.loadProgress = 100;
+            g_sunlight.isFinished = TRUE;
+            PlaySound(TEXT(""), NULL, SND_ASYNC | SND_NODEFAULT);
+        }
+        if (now - g_sunlight.loadTextChangeTime > 300) {
+            const char* texts[] = {
+                "正在数水母...", "编译阳光中...", "连接水母服务器...",
+                "检查今天有没有Bug...", "给水母喂食...", "查看谁在偷看代码...",
+                "正在生成好心情...", "水母正在游泳...", "正在播放启动音乐...",
+                "整理代码中...", "给水母打气...", "正在加载阳光...",
+                "检查版本中...", "水母更新成功", "准备进入桌面..."
+            };
+            g_sunlight.loadTextIndex = (g_sunlight.loadTextIndex + 1) % 15;
+            g_sunlight.loadTextChangeTime = now;
+        }
+    }
+    
+    if (g_sunlight.eggMsgTime > 0 && now - g_sunlight.eggMsgTime > 3000) {
+        g_sunlight.eggMsgTime = 0;
+        g_sunlight.showEggMsg = FALSE;
+        g_sunlight.eggMsg[0] = 0;
+    }
+}
+
+void DrawSunlightLauncher(HDC hdc, RECT rect) {
+    int cx = (rect.left + rect.right) / 2;
+    int cy = (rect.top + rect.bottom) / 2;
+    int w = rect.right - rect.left;
+    int h = rect.bottom - rect.top;
+
+    static BOOL initialized = FALSE;
+    if (!initialized) {
+        initialized = TRUE;
+        ZeroMemory(&g_sunlight, sizeof(SunlightState));
+        g_sunlight.startTime = GetTickCount();
+        g_sunlight.lastFrameTime = g_sunlight.startTime;
+        g_sunlight.jellyX = 400;
+        g_sunlight.jellyY = 350;
+        g_sunlight.jellyAlpha = 0.0f;
+        g_sunlight.jellyScale = 0.7f;
+        g_sunlight.jellySpeed = 1.0f;
+
+        // ===== 强制禁用原有启动流程 =====
+        showFOSBeta = FALSE;
+        showBootAnimation = TRUE;
+        
+//        // 停止原有启动定时器（备用）
+//        extern HWND g_hwnd;
+//        if (g_hwnd) {
+//            KillTimer(g_hwnd, 4);
+//            KillTimer(g_hwnd, 8);
+//        }
+
+        time_t now = time(NULL);
+        tm* t = localtime(&now);
+        int m = t->tm_mon + 1, d = t->tm_mday, hh = t->tm_hour, min = t->tm_min;
+
+        if (m == 9 && d == 2) {
+            g_sunlight.isBirthday = TRUE;
+            g_sunlight.isGoldMode = TRUE;
+            if (hh >= 14 && hh < 15) { g_sunlight.isBirthHour = TRUE; g_sunlight.isDoubleEgg = TRUE; }
+            if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
+        }
+        if (m == 1 && d == 1) {
+            g_sunlight.isSubmitDay = TRUE;
+            g_sunlight.isGoldMode = TRUE;
+            if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
+        }
+        if (m == 5 && d == 20) {
+            g_sunlight.isLoveDay = TRUE;
+        }
+        if (hh == 3 && min == 47 && !g_sunlight.isBirthday && !g_sunlight.isSubmitDay) {
+            g_sunlight.isSoulHour = TRUE;
+        }
+
+        if (g_sunlight.isLoveDay) {
+            g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "developer.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+            if (!g_sunlight.hPhoto) {
+                g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "photo.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+            }
+            g_sunlight.photoLoaded = (g_sunlight.hPhoto != NULL);
+        }
+
+        const char* quotes[] = {
+            "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+            "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+            "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+            "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+            "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+        };
+        int idx = rand() % 15;
+        strcpy(g_sunlight.quote, quotes[idx]);
+        g_sunlight.quoteIndex = idx;
+        g_sunlight.quoteChangeTime = g_sunlight.startTime;
+
+        PlaySound(TEXT("startup.wav"), NULL, SND_ASYNC | SND_NODEFAULT);
+        g_sunlight.musicStarted = TRUE;
+    }
+
+    // 先更新状态
+    sl_UpdateSunlightState();
+
+    // ---- 情人节照片模式 ----
+    if (g_sunlight.showLovePhoto) {
+        sl_DrawPhoto(hdc, cx, cy, g_sunlight.hPhoto);
+        return;
+    }
+    
+    // ---- 情人节问答模式 ----
+    if (g_sunlight.showLoveQuestion) {
+        sl_DrawLoveQuestion(hdc, cx, cy);
+        return;
+    }
+
+    // ---- 背景 ----
+    HBRUSH hbg = CreateSolidBrush(RGB(26, 11, 46));
+    FillRect(hdc, &rect, hbg);
+    DeleteObject(hbg);
+    SetBkMode(hdc, TRANSPARENT);
+
+    // ---- 绘制水母 ----
+    int jx = (int)g_sunlight.jellyX;
+    int jy = (int)g_sunlight.jellyY;
+    if (g_sunlight.isBirthday && !g_sunlight.hasEntered && g_sunlight.entryX > -50) {
+        jx = (int)g_sunlight.entryX;
+        jy = (int)g_sunlight.entryY;
+    }
+    if (jx > -100 && jx < w + 100 && g_sunlight.jellyAlpha > 0.05f) {
+        sl_DrawJellyfish(hdc, jx, jy, 140, g_sunlight.jellyAngle,
+            g_sunlight.jellyPulse, g_sunlight.jellyAlpha,
+            g_sunlight.isGoldMode, g_sunlight.jellyScale);
+    }
+
+    // ---- 绘制Logo ----
+    if (g_sunlight.progress > 0.4f) {
+        float la = sl_clampf((g_sunlight.progress - 0.4f) / 0.1f, 0, 1);
+        if (la > 0.1f) {
+            HFONT hf = CreateFont(72, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH, "Arial Black");
+            HFONT hof = (HFONT)SelectObject(hdc, hf);
+            SetTextColor(hdc, g_sunlight.isGoldMode ? RGB(251, 191, 36) : RGB(255, 255, 255));
+            RECT r = {cx - 300, cy - 100, cx + 300, cy};
+            DrawTextA(hdc, "JELLYFISH STUDIO", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, hof);
+            DeleteObject(hf);
+        }
+    }
+
+    // ---- 字母弹动 ----
+    if (g_sunlight.letterProgress > 0 && g_sunlight.letterProgress < 1.0f) {
+        sl_DrawBouncingLetters(hdc, cx, cy + 15, "JELLYFISH STUDIO",
+            g_sunlight.letterProgress, g_sunlight.isGoldMode, g_sunlight.letterOffsets);
+    }
+
+    // ---- 字母完成后保持显示 ----
+    if (g_sunlight.letterProgress >= 1.0f && g_sunlight.progress >= 0.8f) {
+        HFONT hf = CreateFont(48, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "Arial Black");
+        HFONT hof = (HFONT)SelectObject(hdc, hf);
+        SetTextColor(hdc, g_sunlight.isGoldMode ? RGB(251, 191, 36) : RGB(255, 255, 255));
+        RECT r = {cx - 300, cy - 30, cx + 300, cy + 30};
+        DrawTextA(hdc, "JELLYFISH STUDIO", -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(hf);
+    }
+
+    // ---- 启动器主界面 ----
+    if (g_sunlight.progress >= 0.8f && !g_sunlight.isLoading) {
+        HFONT hsf = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+        HFONT hof = (HFONT)SelectObject(hdc, hsf);
+        SetTextColor(hdc, RGB(167, 139, 250));
+        RECT sr = {cx - 200, cy + 40, cx + 200, cy + 70};
+        DrawTextA(hdc, "f系统 · 专业版", -1, &sr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(hsf);
+
+        HFONT hqf = CreateFont(18, 0, 0, 0, FW_NORMAL, TRUE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+        hof = (HFONT)SelectObject(hdc, hqf);
+        SetTextColor(hdc, RGB(233, 213, 255));
+        RECT qr = {cx - 300, cy + 90, cx + 300, cy + 120};
+        DrawTextA(hdc, g_sunlight.quote, -1, &qr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(hqf);
+
+        HFONT hvf = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "Consolas");
+        hof = (HFONT)SelectObject(hdc, hvf);
+        SetTextColor(hdc, RGB(148, 163, 184));
+        char ver[100];
+        sprintf(ver, "v1.0.400 · sunlight-edition");
+        TextOutA(hdc, 20, rect.bottom - 40, ver, (int)strlen(ver));
+        SelectObject(hdc, hof);
+        DeleteObject(hvf);
+
+        if (g_sunlight.isBirthday || g_sunlight.isSubmitDay || g_sunlight.isSoulHour) {
+            HFONT hef = CreateFont(14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH, "Consolas");
+            hof = (HFONT)SelectObject(hdc, hef);
+            SetTextColor(hdc, RGB(251, 191, 36));
+            char et[100] = "";
+            if (g_sunlight.isDoubleEgg) sprintf(et, "2014.9.2 14:00-15:00");
+            else if (g_sunlight.isBirthday && g_sunlight.isSoulHour) sprintf(et, "2014.9.2 3:47");
+            else if (g_sunlight.isBirthday) sprintf(et, "2014.9.2");
+            else if (g_sunlight.isSubmitDay) sprintf(et, "2026.1.1");
+            else if (g_sunlight.isSoulHour) sprintf(et, "3:47");
+            if (et[0]) {
+                TextOutA(hdc, rect.right - sl_GetTextWidth(hdc, et) - 20, rect.bottom - 40, et, (int)strlen(et));
+            }
+            SelectObject(hdc, hof);
+            DeleteObject(hef);
+        }
+
+        if (g_sunlight.showEggMsg && g_sunlight.eggMsgTime > 0) {
+            HFONT kf = CreateFont(24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+            hof = (HFONT)SelectObject(hdc, kf);
+            SetTextColor(hdc, RGB(251, 191, 36));
+            RECT kr = {cx - 300, cy + 160, cx + 300, cy + 200};
+            DrawTextA(hdc, g_sunlight.eggMsg, -1, &kr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, hof);
+            DeleteObject(kf);
+        }
+
+        if ((GetTickCount() / 500) % 2 == 0) {
+            HFONT hhf = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+            hof = (HFONT)SelectObject(hdc, hhf);
+            SetTextColor(hdc, RGB(148, 163, 184));
+            RECT hr = {cx - 100, rect.bottom - 80, cx + 100, rect.bottom - 50};
+            DrawTextA(hdc, "按任意键开始", -1, &hr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(hdc, hof);
+            DeleteObject(hhf);
+        }
+    }
+
+    // ---- 加载画面 ----
+    if (g_sunlight.isLoading) {
+        // 半透明遮罩
+        HBRUSH hm = CreateSolidBrush(RGB(10, 5, 20));
+        FillRect(hdc, &rect, hm);
+        DeleteObject(hm);
+
+        // 加载标题
+        HFONT hlf = CreateFont(32, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+        HFONT hof = (HFONT)SelectObject(hdc, hlf);
+        SetTextColor(hdc, RGB(255, 255, 255));
+        RECT lr = {cx - 250, cy - 100, cx + 250, cy - 50};
+        DrawTextA(hdc, "正在加载 f系统...", -1, &lr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(hlf);
+
+        // 伪装文本
+        HFONT htf = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+        hof = (HFONT)SelectObject(hdc, htf);
+        SetTextColor(hdc, RGB(233, 213, 255));
+        const char* texts[] = {
+            "正在数水母...", "编译阳光中...", "连接水母服务器...",
+            "检查今天有没有Bug...", "给水母喂食...", "查看谁在偷看代码...",
+            "正在生成好心情...", "水母正在游泳...", "正在播放启动音乐...",
+            "整理代码中...", "给水母打气...", "正在加载阳光...",
+            "检查版本中...", "水母更新成功", "准备进入桌面..."
+        };
+        RECT tr = {cx - 300, cy - 30, cx + 300, cy};
+        DrawTextA(hdc, texts[g_sunlight.loadTextIndex % 15], -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(htf);
+
+        // ---- 进度条 ----
+        int bw = 500;
+        int bh = 10;
+        int bx = cx - bw/2;
+        int by = cy + 30;
+        
+        // 进度条背景
+        RECT rectBarBg = {bx, by, bx + bw, by + bh};
+        HBRUSH hbb = CreateSolidBrush(RGB(50, 30, 70));
+        FillRect(hdc, &rectBarBg, hbb);
+        DeleteObject(hbb);
+
+        // 进度条填充
+        int fw = (int)(bw * g_sunlight.loadProgress / 100);
+        RECT rectBarFill = {bx, by, bx + fw, by + bh};
+        HBRUSH hbf = CreateSolidBrush(g_sunlight.isGoldMode ? RGB(251, 191, 36) : RGB(139, 92, 246));
+        FillRect(hdc, &rectBarFill, hbf);
+        DeleteObject(hbf);
+
+        // 进度百分比
+        HFONT hpf = CreateFont(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH, "Consolas");
+        hof = (HFONT)SelectObject(hdc, hpf);
+        SetTextColor(hdc, RGB(233, 213, 255));
+        char pct[20];
+        sprintf(pct, "%.0f%%", g_sunlight.loadProgress);
+        RECT pr = {cx - 60, cy + 50, cx + 60, cy + 75};
+        DrawTextA(hdc, pct, -1, &pr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        SelectObject(hdc, hof);
+        DeleteObject(hpf);
+
+        // ============================================================
+        //  修复：加载时水母速度控制 - 使用固定慢速位置
+        // ============================================================
+        // 水母在加载时缓慢游动，不随脉冲快速移动
+        float loadTime = (GetTickCount() - g_sunlight.startTime) / 1000.0f;
+        int jx2 = (int)(400 + sin(loadTime * 0.8f) * 150);
+        int jy2 = (int)(300 + sin(loadTime * 0.6f + 1.0f) * 80);
+        sl_DrawJellyfish(hdc, jx2, jy2, 80, g_sunlight.jellyAngle * 0.5f,
+            g_sunlight.jellyPulse * 0.5f, 0.35f,
+            g_sunlight.isGoldMode, 0.6f);
+    }
+}
 
 // 显示Bug列表
 void ShowBugList(HWND hwnd) {
@@ -9513,6 +10284,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             DebugLog("========== WM_CREATE 开始 ==========");
             DebugLog("系统启动时间: %d ms", GetTickCount());
             
+            // ---- 初始化阳间版启动动画 ----
+            if (g_useSunlightLauncher) {
+                ZeroMemory(&g_sunlight, sizeof(SunlightState));
+                g_sunlight.startTime = GetTickCount();
+                g_sunlight.lastFrameTime = g_sunlight.startTime;
+                g_sunlight.jellyX = 400;
+                g_sunlight.jellyY = 350;
+                g_sunlight.jellyAlpha = 0.0f;
+                g_sunlight.jellyScale = 0.7f;
+                g_sunlight.jellySpeed = 1.0f;
+                
+                // ===== 强制接管启动 =====
+                showBootAnimation = TRUE;
+                showFOSBeta = FALSE;
+                DebugLog("阳间版启动动画已初始化，showBootAnimation = TRUE");
+            }
+            
             try {
                 DebugLog("加载配置...");
                 LoadConfig();
@@ -9523,6 +10311,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 DebugLog("设置定时器...");
                 SetTimer(hwnd, 8, 40, NULL);
                 SetTimer(hwnd, 7, 1000, NULL);
+                
+                // ===== 如果启用阳间版启动动画，立即禁用定时器4和8 =====
+                if (g_useSunlightLauncher) {
+                    KillTimer(hwnd, 4);
+                    KillTimer(hwnd, 8);
+                    DebugLog("已禁用定时器4和8");
+                }
                 
                 DebugLog("初始化IME...");
                 hIMC = ImmGetContext(hwnd);
@@ -9540,6 +10335,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 DebugLog("加载日历事件...");
                 LoadCalendarEvents();
                 
+                // ===== 添加动画刷新定时器 =====
+                SetTimer(hwnd, 99, 40, NULL);
+                DebugLog("动画刷新定时器已设置");
+                
                 DebugLog("WM_CREATE 处理完成");
             }
             catch (const std::exception& e) {
@@ -9552,6 +10351,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 TriggerDebugPurpleScreen(hwnd, ERR_WINDOW_CREATE,
                     "窗口创建初始化发生未知异常");
             }
+            
+            InvalidateRect(hwnd, NULL, TRUE);
             break;
         }
         
@@ -9562,6 +10363,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
         }
         
         case WM_TIMER: {
+            // ============================================================
+            //  阳间版启动动画：永久屏蔽定时器4和8
+            // ============================================================
+            if (g_useSunlightLauncher) {
+                // 永久屏蔽定时器4和8，不管任何条件
+                if (wParam == 4 || wParam == 8) {
+                    // 完全忽略，不做任何操作
+                    break;
+                }
+                // 动画刷新定时器99
+                if (wParam == 99) {
+                    if (!g_sunlight.isFinished) {
+                        InvalidateRect(hwnd, NULL, FALSE);
+                    } else {
+                        KillTimer(hwnd, 99);
+                    }
+                    break;
+                }
+            }
+            
+            // ---- 原有定时器代码 ----
             if (wParam == 1) {
                 DebugLog("定时器1: 欢迎界面结束");
                 KillTimer(hwnd, 1);
@@ -9585,21 +10407,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 }
             }
             else if (wParam == 4) {
-                progressValue += 2;
-                if (progressValue >= 100) {
-                    DebugLog("定时器4: 启动完成");
-                    KillTimer(hwnd, 4);
-                    progressValue = 100;
-                    
-                    if (isFirstBoot) {
-                        EndBootAnimation(hwnd);
-                        SetTimer(hwnd, 1, 5000, NULL);
-                        SetTimer(hwnd, 3, 100, NULL);
-                    } else {
-                        ShowLoginScreen(hwnd);
+                // 已被永久屏蔽，不会执行到这里
+                // 但保留安全代码
+                if (!g_useSunlightLauncher) {
+                    progressValue += 2;
+                    if (progressValue >= 100) {
+                        DebugLog("定时器4: 启动完成");
+                        KillTimer(hwnd, 4);
+                        progressValue = 100;
+                        if (isFirstBoot) {
+                            EndBootAnimation(hwnd);
+                            SetTimer(hwnd, 1, 5000, NULL);
+                            SetTimer(hwnd, 3, 100, NULL);
+                        } else {
+                            ShowLoginScreen(hwnd);
+                        }
                     }
+                    InvalidateRect(hwnd, NULL, TRUE);
                 }
-                InvalidateRect(hwnd, NULL, TRUE);
+                break;
             }
             else if (wParam == 5) {
                 DebugLog("定时器5: OOBE完成，准备关机");
@@ -9612,7 +10438,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     DebugLog("定时器6: 关机完成");
                     KillTimer(hwnd, 6);
                     shutdownProgress = 100;
-                    
                     if (!ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCE, 0)) {
                         MessageBox(hwnd, "请按按键退出", "提示", MB_OK | MB_ICONINFORMATION);
                         PostQuitMessage(0);
@@ -9627,16 +10452,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 break;
             }
             else if (wParam == 8) {
-                fosProgressValue += 2;
-                if (fosProgressValue >= 100) {
-                    DebugLog("定时器8: FOS启动完成");
-                    KillTimer(hwnd, 8);
-                    fosProgressValue = 100;
-                    
-                    EndFOSBetaAnimation(hwnd);
-                    SetTimer(hwnd, 4, 40, NULL);
+                // 已被永久屏蔽，不会执行到这里
+                if (!g_useSunlightLauncher) {
+                    fosProgressValue += 2;
+                    if (fosProgressValue >= 100) {
+                        DebugLog("定时器8: FOS启动完成");
+                        KillTimer(hwnd, 8);
+                        fosProgressValue = 100;
+                        EndFOSBetaAnimation(hwnd);
+                        SetTimer(hwnd, 4, 40, NULL);
+                    }
+                    InvalidateRect(hwnd, NULL, TRUE);
                 }
-                InvalidateRect(hwnd, NULL, TRUE);
+                break;
             }
             else if (wParam == 9) {
                 UpdateJellyfishGame(hwnd);
@@ -9838,6 +10666,124 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
         case WM_KEYDOWN: {
             CheckGameActivation(wParam, hwnd);
             
+            // ============================================================
+            //  阳间版启动动画键盘处理
+            // ============================================================
+            if (g_useSunlightLauncher && !g_sunlight.isFinished) {
+                char key = (char)wParam;
+                BOOL ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+                
+                // ---- 情人节照片模式 ----
+                if (g_sunlight.showLovePhoto) {
+                    if (key == VK_ESCAPE) {
+                        g_sunlight.showLovePhoto = FALSE;
+                        g_sunlight.showLoveQuestion = TRUE;
+                        InvalidateRect(hwnd, NULL, TRUE);
+                        return 0;
+                    }
+                    return 0;
+                }
+                
+                // ---- 情人节问答模式 ----
+                if (g_sunlight.showLoveQuestion) {
+                    if (key == VK_ESCAPE) {
+                        g_sunlight.showLoveQuestion = FALSE;
+                        InvalidateRect(hwnd, NULL, TRUE);
+                        return 0;
+                    }
+                    if (key == VK_RETURN) {
+                        if (_stricmp(g_sunlight.loveInput, "yes") == 0) {
+                            g_sunlight.loveAnswerYes = TRUE;
+                            g_sunlight.loveAnswered = TRUE;
+                            g_sunlight.showLoveQuestion = FALSE;
+                            g_sunlight.showLovePhoto = TRUE;
+                            InvalidateRect(hwnd, NULL, TRUE);
+                            return 0;
+                        } else if (_stricmp(g_sunlight.loveInput, "no") == 0) {
+                            g_sunlight.loveAnswerYes = FALSE;
+                            g_sunlight.loveAnswered = TRUE;
+                            g_sunlight.showLoveQuestion = FALSE;
+                            strcpy(g_sunlight.eggMsg, "好吧，水母有点伤心...");
+                            g_sunlight.showEggMsg = TRUE;
+                            g_sunlight.eggMsgTime = GetTickCount();
+                            InvalidateRect(hwnd, NULL, TRUE);
+                            return 0;
+                        }
+                        return 0;
+                    }
+                    if (key == VK_BACK) {
+                        if (g_sunlight.loveInputPos > 0) {
+                            g_sunlight.loveInputPos--;
+                            g_sunlight.loveInput[g_sunlight.loveInputPos] = '\0';
+                            InvalidateRect(hwnd, NULL, TRUE);
+                        }
+                        return 0;
+                    }
+                    if (isalpha(key) && g_sunlight.loveInputPos < 19) {
+                        g_sunlight.loveInput[g_sunlight.loveInputPos++] = tolower(key);
+                        g_sunlight.loveInput[g_sunlight.loveInputPos] = '\0';
+                        InvalidateRect(hwnd, NULL, TRUE);
+                        return 0;
+                    }
+                    return 0;
+                }
+                
+                // ---- Ctrl+J 水母弹跳 ----
+                if (ctrl && (key == 'J' || key == 'j')) {
+                    if (!g_sunlight.isBouncing) {
+                        g_sunlight.isBouncing = TRUE;
+                        g_sunlight.bounceStartY = g_sunlight.jellyY;
+                        g_sunlight.bounceStartTime = GetTickCount();
+                        g_sunlight.eggMsgTime = GetTickCount();
+                        strcpy(g_sunlight.eggMsg, "水母弹跳！");
+                        g_sunlight.showEggMsg = TRUE;
+                        InvalidateRect(hwnd, NULL, TRUE);
+                    }
+                    return 0;
+                }
+                
+                // ---- Ctrl+C 彩蛋系统 ----
+                if (ctrl && (key == 'C' || key == 'c')) {
+                    g_sunlight.eggMsgTime = GetTickCount();
+                    strcpy(g_sunlight.eggMsg, "彩蛋系统已加载");
+                    g_sunlight.showEggMsg = TRUE;
+                    g_sunlight.eggTriggerCount++;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                // ---- Ctrl+? 特殊彩蛋 ----
+                if (ctrl && key == '?') {
+                    g_sunlight.eggMsgTime = GetTickCount();
+                    strcpy(g_sunlight.eggMsg, "你终于问了");
+                    g_sunlight.showEggMsg = TRUE;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                // ---- Ctrl+Esc 别走彩蛋 ----
+                if (ctrl && key == VK_ESCAPE) {
+                    g_sunlight.eggMsgTime = GetTickCount();
+                    strcpy(g_sunlight.eggMsg, "别走，系统在等你");
+                    g_sunlight.showEggMsg = TRUE;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                // ---- 按任意键进入加载（非Ctrl组合键） ----
+                if (!ctrl && g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
+                    g_sunlight.isLoading = TRUE;
+                    g_sunlight.loadProgress = 0;
+                    g_sunlight.loadTextIndex = 0;
+                    g_sunlight.loadTextChangeTime = GetTickCount();
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                return 0;
+            }
+            
+            // ---- 原有键盘处理 ----
             if (showGameEgg) {
                 HandleJellyfishGameInput(wParam, hwnd);
                 return 0;
@@ -9981,6 +10927,113 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             
             DebugLog("鼠标点击: (%d, %d)", x, y);
             
+            // ============================================================
+            //  阳间版启动动画鼠标处理
+            // ============================================================
+            if (g_useSunlightLauncher && !g_sunlight.isFinished) {
+                RECT rect;
+                GetClientRect(hwnd, &rect);
+                int cx = (rect.left + rect.right) / 2;
+                int cy = (rect.top + rect.bottom) / 2;
+                
+                if (g_sunlight.showLovePhoto || g_sunlight.showLoveQuestion) {
+                    return 0;
+                }
+                
+                // ---- 点击Logo ----
+                if (x > cx - 200 && x < cx + 200 && y > cy - 80 && y < cy + 30) {
+                    g_sunlight.eggMsgTime = GetTickCount();
+                    strcpy(g_sunlight.eggMsg, "JELLYFISH STUDIO");
+                    g_sunlight.showEggMsg = TRUE;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                // ---- 点击水母 ----
+                int jx = (int)g_sunlight.jellyX;
+                int jy = (int)g_sunlight.jellyY;
+                if (g_sunlight.isBirthday && !g_sunlight.hasEntered && g_sunlight.entryX > -50) {
+                    jx = (int)g_sunlight.entryX;
+                    jy = (int)g_sunlight.entryY;
+                }
+                if (x > jx - 70 && x < jx + 70 && y > jy - 60 && y < jy + 60) {
+                    if (g_sunlight.isLoveDay) {
+                        g_sunlight.showLoveQuestion = TRUE;
+                        g_sunlight.loveInput[0] = '\0';
+                        g_sunlight.loveInputPos = 0;
+                        g_sunlight.loveAnswered = FALSE;
+                        g_sunlight.loveAnswerYes = FALSE;
+                        InvalidateRect(hwnd, NULL, TRUE);
+                        return 0;
+                    } else {
+                        g_sunlight.eggMsgTime = GetTickCount();
+                        strcpy(g_sunlight.eggMsg, "水母说：你好！");
+                        g_sunlight.showEggMsg = TRUE;
+                        InvalidateRect(hwnd, NULL, TRUE);
+                        return 0;
+                    }
+                }
+                
+                // ---- 点击语录切换 ----
+                if (x > cx - 300 && x < cx + 300 && y > cy + 90 && y < cy + 120) {
+                    const char* quotes[] = {
+                        "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+                        "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+                        "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+                        "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+                        "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+                    };
+                    int idx = rand() % 15;
+                    strcpy(g_sunlight.quote, quotes[idx]);
+                    g_sunlight.quoteChangeTime = GetTickCount();
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                // ---- 点击版本号 ----
+                if (x > 20 && x < 200 && y > rect.bottom - 40 && y < rect.bottom - 10) {
+                    g_sunlight.eggMsgTime = GetTickCount();
+                    strcpy(g_sunlight.eggMsg, "JammyJellyfish");
+                    g_sunlight.showEggMsg = TRUE;
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                // ---- 双击底部 ----
+                static DWORD lastClick = 0;
+                static int clickCount = 0;
+                if (y > rect.bottom - 60 && y < rect.bottom - 10) {
+                    DWORD now = GetTickCount();
+                    if (now - lastClick < 500) {
+                        clickCount++;
+                        if (clickCount >= 2) {
+                            g_sunlight.eggMsgTime = GetTickCount();
+                            strcpy(g_sunlight.eggMsg, "你是开发人员吗？");
+                            g_sunlight.showEggMsg = TRUE;
+                            clickCount = 0;
+                            InvalidateRect(hwnd, NULL, TRUE);
+                        }
+                    } else {
+                        clickCount = 1;
+                    }
+                    lastClick = now;
+                    return 0;
+                }
+                
+                // ---- 任意点击进入加载 ----
+                if (g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
+                    g_sunlight.isLoading = TRUE;
+                    g_sunlight.loadProgress = 0;
+                    g_sunlight.loadTextIndex = 0;
+                    g_sunlight.loadTextChangeTime = GetTickCount();
+                    InvalidateRect(hwnd, NULL, TRUE);
+                    return 0;
+                }
+                
+                return 0;
+            }
+            
+            // ---- 原有鼠标处理 ----
             if (showGameEgg) {
                 return 0;
             }
@@ -10850,6 +11903,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             KillTimer(hwnd, 7);
             KillTimer(hwnd, 8);
             KillTimer(hwnd, 9);
+            KillTimer(hwnd, 99);  // 动画刷新定时器
             
             if (hIMC) {
                 ImmReleaseContext(hwnd, hIMC);
@@ -10861,6 +11915,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             }
             if (hEthernetBackground) {
                 DeleteObject(hEthernetBackground);
+            }
+            
+            // ---- 释放阳间版启动动画资源 ----
+            if (g_sunlight.hPhoto) {
+                DeleteObject(g_sunlight.hPhoto);
+                g_sunlight.hPhoto = NULL;
             }
             
             SaveConfig();
@@ -10895,6 +11955,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
             
+            // ============================================================
+            //  阳间版启动动画（优先绘制）
+            // ============================================================
+            if (g_useSunlightLauncher && !g_sunlight.isFinished) {
+                DrawSunlightLauncher(hdc, rect);
+                if (g_sunlight.isFinished) {
+                    showBootAnimation = FALSE;
+                    PlaySound(TEXT(""), NULL, SND_ASYNC | SND_NODEFAULT);
+                    // 进入登录界面
+                    ShowLoginScreen(hwnd);
+                }
+                EndPaint(hwnd, &ps);
+                return 0;
+            }
+            
+            // ---- 原有绘制代码 ----
             if (showGameEgg) {
                 DrawJellyfishGame(hdc, hwnd);
                 EndPaint(hwnd, &ps);

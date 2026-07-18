@@ -4,7 +4,6 @@
 # Compiled Object files
 *.slo
 *.lo
-*.o
 *.obj
 
 # Precompiled Headers
@@ -27,5 +26,4 @@
 *.lib
 
 # Executables
-*.out
 *.app

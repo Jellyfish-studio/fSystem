@@ -220,6 +220,135 @@ typedef struct _ButtonInfo {
 
 static ButtonInfo g_buttons[20];
 static int g_buttonCount = 0;
+
+// ============================================================
+//  阳间版安装引导状态
+// ============================================================
+#define INSTALL_SLIDE_COUNT 20
+
+typedef struct {
+    int currentSlide;
+    DWORD slideStartTime;
+    int progress;
+    BOOL isPaused;
+    BOOL isComplete;
+    BOOL isInstalling;
+    char statusText[256];
+    char adText[256];
+    char slideTitle[256];
+    char slideContent[1024];
+    DWORD lastFrameTime;
+} InstallState;
+
+static InstallState g_install = {0};
+static BOOL showInstall = FALSE;  // 是否显示安装引导界面
+
+// 广告语列表
+static const char* g_adList[] = {
+    "水母工作室 · 一个你可以放心打开的地方。",
+    "没有隐藏彩蛋，只有一只温和的水母。",
+    "守慧很丑，但它无处不在。它是水母工作室的签名。",
+    "你看到的规则，就是全部的规则。",
+    "不会自己更新规则，不会在深夜添加彩蛋。",
+    "你可以随时打开它，也可以随时关上它。它不会在意。",
+    "代码保持你离开时的样子。",
+    "水母说：你来了真好。",
+    "写代码，也是一种浪漫。",
+    "你做的每一件事都很重要。",
+    "慢慢来，比较快。",
+    "保持热爱，奔赴山海。",
+    "代码是写给未来的情书。",
+    "每一个 bug 都是成长的机会。",
+    "坚持是最酷的事。",
+    "阳光正好，水母飘过。",
+    "你比你想象中更厉害。",
+    "代码里有你的影子。",
+    "今天也是好天气。",
+    "欢迎回来，朋友。",
+    "愿你写代码时心情愉快。",
+    "一起写代码吧。",
+    "你值得被看见。",
+    "用心写好每一行。",
+    "今天又是美好的一天。",
+    "你来了，故事就开始了。",
+    "代码会说话。",
+    "梦想在代码中绽放。",
+    "f系统会一直陪着你。",
+    "水母给你力量。"
+};
+#define AD_COUNT (sizeof(g_adList) / sizeof(g_adList[0]))
+
+// 幻灯片数据
+typedef struct {
+    const char* title;
+    const char* content;
+    const char* status;
+    int progress;
+} InstallSlide;
+
+static const InstallSlide g_slides[INSTALL_SLIDE_COUNT] = {
+    {"欢迎来到水母工作室",
+     "欢迎使用 Jellyfish Studio 阳间版系统。\n这里没有惊吓，没有隐藏机制，没有会在凌晨三点自动触发的彩蛋。\n这里只有一只温和的水母，和一个你可以放心打开的桌面。",
+     "正在初始化水母引擎...", 5},
+    {"水母启动引擎",
+     "每次开机，水母都会从屏幕中央浮现。\n带着柔和的光晕，缓缓出现在您面前。\n它不会突然跳出来吓您。\n它只是安静地漂浮在那里，告诉您：系统已就绪。",
+     "正在加载水母动画模块...", 10},
+    {"字母弹动系统",
+     "J E L L Y F I S H —— 九个字母，九个独立的灵魂。\n它们会按顺序弹出，每一个都精准落回原位。\n如果您看到某个字母提前跳出来，那不是错误。\n那是它在跟您打招呼。",
+     "正在部署字母弹动引擎...", 15},
+    {"守慧吉祥物",
+     "守慧是一只黄色的水母吉祥物。\n它长得不算好看，但它很努力。\n它不会说话，也不会动。但它一直在那里。\n您在界面上看到它，就知道您还在自己的系统里。",
+     "正在安装守慧吉祥物...", 20},
+    {"守慧的出现位置",
+     "守慧遍布系统的各个角落：\n· CD-KEY验证界面 · 登录界面 · OOBE设置向导\n· 系统信息窗口 · 文件管理器 · 计算器\n· Bug报告工具 · 系统设置 · 日历\n· 紫屏错误 · 开发历程彩蛋",
+     "正在部署守慧位置数据库...", 25},
+    {"阳间规则",
+     "? 没有隐藏的彩蛋\n? 没有凌晨三点触发机制\n? 没有悄悄修改您的代码\n? 没有暗中记录您的操作习惯\n? 没有\"你确定吗\"的弹窗\n您看到的规则，就是全部的规则。",
+     "正在加载阳间规则集...", 30},
+    {"没有隐藏的惊吓",
+     "这里没有鬼故事。没有突然变色的紫屏。\n没有藏在代码里的神秘变量。\n没有只有特定时间才会出现的字符。\n没有倒计时。\n如果您在晚上十点打开它，它不会问您为什么还没睡。",
+     "正在确认无隐藏机制...", 35},
+    {"夜深了，注意休息",
+     "如果您在凌晨三点打开它，它也不会惊讶。\n它只会显示：\"夜深了，注意休息。\"\n然后安静地启动，等您开始工作。\n它不会记录您熬夜的次数。\n它只是温和地提醒一次，然后继续做它该做的事。",
+     "正在加载夜间问候模块...", 40},
+    {"您可以修改任何东西",
+     "您添加的功能会正常显示。\n您删除的代码不会自己回来。\n您改的启动文本会按您写的样子出现。\n您移动的按钮会停留在您放置的位置。\n不会有一个隐藏进程在后台悄悄把您的改动还原。",
+     "正在部署用户修改权限...", 45},
+    {"错误会被正常显示",
+     "如果系统遇到问题，它会平静地告诉您。\n用清晰的文字，而不是蓝屏或紫屏。\n不会闪烁红色。不会突然关机。\n不会丢出一串十六进制代码让您自己猜。\n它只会停下来，等您确认，然后继续。",
+     "正在安装错误处理系统...", 50},
+    {"音乐随您心情",
+     "您可以放启动音乐，也可以不放。\n没有音乐文件？安静启动，不报错。\n不会弹出\"缺少文件\"的窗口。\n不会闪烁红灯。\n它只会在日志里默默记录一行：\n\"启动音乐未加载，系统正常运行。\"",
+     "正在配置音乐加载器...", 55},
+    {"稳定可靠",
+     "您今天看到的内容，明天还会在。\n不会自己更新规则。不会在深夜添加彩蛋。\n不会修改自己的注释。\n您留下的每行代码，都会保持您离开时的样子。\n它是可预期的、稳定的、不会自己变动的。",
+     "正在锁定系统稳定性...", 60},
+    {"您可以随时离开",
+     "您可以随时打开它。也可以随时关上它。\n关闭系统 —— 它不会感到遗憾。\n切换到阴间版 —— 它不会阻止您。\n删掉整个仓库 —— 它不会自己恢复。\n它只是稳定地运行着，等您下一次回来。",
+     "正在配置退出机制...", 65},
+    {"水母的哲学",
+     "\"代码写累了，休息一下。\"\n\"你做的每一件事都很重要。\"\n\"写代码，也是一种浪漫。\"\n\"你比你想象中更厉害。\"\n\"代码里有你的影子。\"\n\"坚持是最酷的事。\"\n\"保持热爱，奔赴山海。\"",
+     "正在加载水母语录库...", 70},
+    {"我们的承诺",
+     "不会记住您的输入习惯。\n不会记录您用了多少次命令。\n不会在开机的时候提醒您\"您上周输错了七次命令\"。\n它只是温和地漂浮在那里，陪您开始新的一天。",
+     "正在确认隐私承诺...", 75},
+    {"您现在知道全部规则了",
+     "没有隐藏条款。\n没有只能在特定条件下触发的行为。\n没有只有开发者才知道的秘密入口。\n阳间版没有秘密。\n它的全部行为，都写在代码里。",
+     "正在确认规则完整性...", 80},
+    {"准备就绪",
+     "水母引擎已加载。守慧已就位。\n字母弹动系统已部署。阳间规则已确认。\n错误处理系统已安装。音乐系统已配置。\n一切都已准备就绪。",
+     "正在进行最终检查...", 85},
+    {"请记住",
+     "你是开发者。\n你是创作者。\n你是这个系统的主人。\n你写下的每一行代码，都比你想象的更有力量。",
+     "正在写入最终确认...", 88},
+    {"最后的叮嘱",
+     "如果有一天你不想用了，可以删除它。\n如果有一天你想重新开始，可以重新安装它。\n它不会阻止你，不会挽留你，不会记录你离开的时间。\n它只是你创造的一个工具，一个伙伴，一个水母。",
+     "正在完成安装...", 92},
+    {"安装完成",
+     "?? 水母工作室 · 阳间版 已准备就绪。\n\n您现在可以随时打开它。\n也可以随时关上它。\n它不会在意。\n它只是稳定地运行着，等您下一次回来。",
+     "安装完成", 100}
+};
+
 // ==================== DEBUG函数声明 ====================
 void DebugLog(const char* format, ...);
 void* DebugMalloc(size_t size, const char* file, int line);
@@ -1563,6 +1692,310 @@ void CreateEthernetBackground(HWND hwnd) {\
     isEthernetBackgroundLoaded = TRUE;\
 }\
 //废弃代码完 
+
+// ============================================================
+//  绘制阳间版安装引导界面
+// ============================================================
+
+static void DrawInstallBackground(HDC hdc, RECT rect) {
+    // 深蓝色渐变背景 - 致敬 Win95 风格
+    for (int y = rect.top; y < rect.bottom; y++) {
+        double ratio = (double)(y - rect.top) / (rect.bottom - rect.top);
+        int r = (int)(11 * (1 - ratio) + 26 * ratio);
+        int g = (int)(26 * (1 - ratio) + 58 * ratio);
+        int b = (int)(58 * (1 - ratio) + 106 * ratio);
+        COLORREF color = RGB(r, g, b);
+        HPEN hPen = CreatePen(PS_SOLID, 1, color);
+        HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+        MoveToEx(hdc, rect.left, y, NULL);
+        LineTo(hdc, rect.right, y);
+        SelectObject(hdc, hOldPen);
+        DeleteObject(hPen);
+    }
+}
+
+static void DrawInstallSlide(HDC hdc, RECT rect) {
+    int cx = (rect.left + rect.right) / 2;
+    int cy = (rect.top + rect.bottom) / 2;
+    
+    // 背景
+    DrawInstallBackground(hdc, rect);
+    
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(255, 255, 255));
+    
+    // ---- 左上角Logo ----
+    HFONT hLogoFont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+    HFONT hOldFont = (HFONT)SelectObject(hdc, hLogoFont);
+    SetTextColor(hdc, RGB(150, 200, 255));
+    TextOut(hdc, 30, 25, "Jellyfish Studio 安装程序，接下来将介绍本系统的特性，请按enter翻页", 66);
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hLogoFont);
+    
+    // ---- 右上角"正在安装"文字 ----
+    HFONT hInstFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+    hOldFont = (HFONT)SelectObject(hdc, hInstFont);
+    SetTextColor(hdc, RGB(100, 200, 150));
+    TextOut(hdc, rect.right - 120, 28, "● 正在安装", 10);
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hInstFont);
+    
+    // ---- 幻灯片标题 ----
+    HFONT hTitleFont = CreateFont(40, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+    SetTextColor(hdc, RGB(255, 255, 255));
+    
+    RECT titleRect = {rect.left + 60, rect.top + 80, rect.right - 60, rect.top + 150};
+    DrawTextA(hdc, g_install.slideTitle, -1, &titleRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hTitleFont);
+    
+    // ---- 幻灯片内容 ----
+    HFONT hContentFont = CreateFont(22, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    hOldFont = (HFONT)SelectObject(hdc, hContentFont);
+    SetTextColor(hdc, RGB(200, 220, 240));
+    
+    RECT contentRect = {rect.left + 80, rect.top + 170, rect.right - 80, rect.bottom - 140};
+    DrawTextA(hdc, g_install.slideContent, -1, &contentRect, DT_CENTER | DT_WORDBREAK);
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hContentFont);
+    
+    // ---- 底部广告语 ----
+    HFONT hAdFont = CreateFont(18, 0, 0, 0, FW_NORMAL, TRUE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+    hOldFont = (HFONT)SelectObject(hdc, hAdFont);
+    SetTextColor(hdc, RGB(180, 200, 220));
+    
+    RECT adRect = {rect.left + 60, rect.bottom - 100, rect.right - 60, rect.bottom - 70};
+    DrawTextA(hdc, g_install.adText, -1, &adRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hAdFont);
+    
+    // ---- 幻灯片编号 ----
+    HFONT hNumFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+    hOldFont = (HFONT)SelectObject(hdc, hNumFont);
+    SetTextColor(hdc, RGB(120, 160, 200));
+    
+    char numText[64];
+    sprintf(numText, "幻灯片 %d / %d", g_install.currentSlide + 1, INSTALL_SLIDE_COUNT);
+    TextOut(hdc, rect.right - 180, rect.bottom - 95, numText, strlen(numText));
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hNumFont);
+    
+    // ---- 进度条 ----
+    int barX = rect.left + 100;
+    int barY = rect.bottom - 50;
+    int barW = rect.right - rect.left - 200;
+    int barH = 16;
+    
+    // 进度条背景
+    RECT barBg = {barX, barY, barX + barW, barY + barH};
+    HBRUSH hBgBrush = CreateSolidBrush(RGB(40, 60, 90));
+    FillRect(hdc, &barBg, hBgBrush);
+    DeleteObject(hBgBrush);
+    
+    // 进度条填充 (Win95风格块状)
+    int fillW = (int)(barW * g_install.progress / 100.0f);
+    if (fillW > 0) {
+        int blockSize = 8;
+        for (int x = barX; x < barX + fillW; x += blockSize) {
+            int blockW = min(blockSize, barX + fillW - x);
+            double ratio = (double)(x - barX) / barW;
+            int r = (int)(60 + ratio * 100);
+            int g = (int)(180 + ratio * 50);
+            int b = (int)(220 + ratio * 35);
+            COLORREF color = RGB(r, g, b);
+            RECT blockRect = {x, barY + 1, x + blockW - 1, barY + barH - 1};
+            HBRUSH hBlockBrush = CreateSolidBrush(color);
+            FillRect(hdc, &blockRect, hBlockBrush);
+            DeleteObject(hBlockBrush);
+        }
+    }
+    
+    // 进度条边框
+    HPEN hBorderPen = CreatePen(PS_SOLID, 1, RGB(100, 150, 200));
+    HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+    SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    Rectangle(hdc, barX, barY, barX + barW, barY + barH);
+    SelectObject(hdc, hOldPen);
+    DeleteObject(hBorderPen);
+    
+    // ---- 进度百分比和状态文字 ----
+    HFONT hStatusFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+    hOldFont = (HFONT)SelectObject(hdc, hStatusFont);
+    SetTextColor(hdc, RGB(160, 190, 220));
+    
+    char statusText[256];
+    sprintf(statusText, "%d%% · %s", g_install.progress, g_install.statusText);
+    TextOut(hdc, barX, barY + barH + 6, statusText, strlen(statusText));
+    
+    if (g_install.isPaused) {
+        SetTextColor(hdc, RGB(255, 200, 100));
+        TextOut(hdc, barX + barW - 140, barY + barH + 6, "? 已暂停 (按空格继续)", 22);
+    }
+    
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hStatusFont);
+    
+    // ---- 右下角守慧吉祥物 ----
+    DrawShouhuiMascot(hdc, rect.right - 80, rect.bottom - 120, 55);
+    
+    // ---- 底部提示文字 ----
+    HFONT hHintFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+    hOldFont = (HFONT)SelectObject(hdc, hHintFont);
+    SetTextColor(hdc, RGB(80, 120, 160));
+    TextOut(hdc, rect.left + 30, rect.bottom - 25, "空格: 暂停/继续  Enter: 跳过当前页面", 36);
+    SelectObject(hdc, hOldFont);
+    DeleteObject(hHintFont);
+}
+
+// ============================================================
+//  安装引导逻辑函数
+// ============================================================
+
+// 更新安装状态 - 每5秒翻页
+static void UpdateInstallState() {
+    if (!g_install.isInstalling || g_install.isComplete || g_install.isPaused) return;
+    
+    DWORD now = GetTickCount();
+    DWORD elapsed = now - g_install.slideStartTime;
+    
+    // 每张幻灯片停留5秒
+    if (elapsed >= 5000) {
+        g_install.currentSlide++;
+        
+        if (g_install.currentSlide >= INSTALL_SLIDE_COUNT) {
+            g_install.isComplete = TRUE;
+            g_install.isInstalling = FALSE;
+            g_install.progress = 100;
+            DebugLog("安装引导完成，所有幻灯片播放完毕");
+            return;
+        }
+        
+        // 加载下一张幻灯片
+        const InstallSlide* slide = &g_slides[g_install.currentSlide];
+        strcpy(g_install.slideTitle, slide->title);
+        strcpy(g_install.slideContent, slide->content);
+        strcpy(g_install.statusText, slide->status);
+        g_install.progress = slide->progress;
+        g_install.slideStartTime = now;
+        
+        // 更新广告语
+        int adIdx = g_install.currentSlide % AD_COUNT;
+        strcpy(g_install.adText, g_adList[adIdx]);
+        
+        DebugLog("切换到幻灯片 %d: %s (进度: %d%%)", g_install.currentSlide + 1, slide->title, g_install.progress);
+    }
+}
+
+// 安装完成回调 - 进入OOBE
+static void OnInstallComplete(HWND hwnd) {
+    g_install.isComplete = TRUE;
+    g_install.isInstalling = FALSE;
+    g_install.progress = 100;
+    
+    DebugLog("阳间版安装完成，进入OOBE设置向导");
+    if (hwnd) {
+        // 关闭安装界面定时器
+        KillTimer(hwnd, 98);
+        showInstall = FALSE;
+        
+        // 直接进入OOBE
+        DebugLog("进入OOBE配置向导");
+        StartOOBE(hwnd);
+        
+        // 重绘窗口
+        InvalidateRect(hwnd, NULL, TRUE);
+        UpdateWindow(hwnd);
+    }
+}
+
+// 初始化安装引导
+void InitInstallGuide(HWND hwnd) {
+    ZeroMemory(&g_install, sizeof(InstallState));
+    g_install.isInstalling = TRUE;
+    g_install.isPaused = FALSE;
+    g_install.isComplete = FALSE;
+    g_install.currentSlide = 0;
+    g_install.progress = 5;
+    g_install.slideStartTime = GetTickCount();
+    showInstall = TRUE;
+    
+    // 加载第一张幻灯片
+    const InstallSlide* slide = &g_slides[0];
+    strcpy(g_install.slideTitle, slide->title);
+    strcpy(g_install.slideContent, slide->content);
+    strcpy(g_install.statusText, slide->status);
+    strcpy(g_install.adText, g_adList[0]);
+    
+    DebugLog("安装引导初始化完成，共 %d 张幻灯片，每张5秒", INSTALL_SLIDE_COUNT);
+    
+    if (hwnd) {
+        // 设置定时器更新安装状态 (100ms)
+        SetTimer(hwnd, 98, 100, NULL);
+        InvalidateRect(hwnd, NULL, TRUE);
+        DebugLog("安装引导定时器已设置 (ID: 98)");
+    }
+}
+
+// 处理安装界面输入
+void HandleInstallInput(char key, HWND hwnd) {
+    if (!g_install.isInstalling) return;
+    
+    if (key == VK_SPACE) {
+        // 空格键暂停/继续
+        g_install.isPaused = !g_install.isPaused;
+        if (!g_install.isPaused) {
+            g_install.slideStartTime = GetTickCount();
+        }
+        InvalidateRect(hwnd, NULL, TRUE);
+        return;
+    }
+    
+    if (key == VK_RETURN) {
+        // Enter键手动切换到下一张
+        if (!g_install.isPaused && !g_install.isComplete) {
+            g_install.currentSlide++;
+            if (g_install.currentSlide >= INSTALL_SLIDE_COUNT) {
+                OnInstallComplete(hwnd);
+                return;
+            }
+            const InstallSlide* slide = &g_slides[g_install.currentSlide];
+            strcpy(g_install.slideTitle, slide->title);
+            strcpy(g_install.slideContent, slide->content);
+            strcpy(g_install.statusText, slide->status);
+            g_install.progress = slide->progress;
+            g_install.slideStartTime = GetTickCount();
+            
+            int adIdx = g_install.currentSlide % AD_COUNT;
+            strcpy(g_install.adText, g_adList[adIdx]);
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        return;
+    }
+    
+    if (key == VK_ESCAPE) {
+        // ESC键跳过安装（直接进入OOBE）
+        OnInstallComplete(hwnd);
+        return;
+    }
+}
+
 
 // ============================================================
 //  阳间版启动动画 - 完整实现
@@ -7195,14 +7628,23 @@ void HandleCDKeyInput(char key) {
             isActivated = TRUE;
             isTrialMode = FALSE;
             cdKeyError = FALSE;
-            ShowOOBE(NULL);
+            // 关闭CD-KEY界面，进入安装引导
+            showCDKeyScreen = FALSE;
+            DebugLog("CD-KEY验证成功，启动安装引导");
+            InitInstallGuide(NULL);
         } else {
             cdKeyError = TRUE;
             strcpy(cdKeyErrorMsg, "无效的CD-KEY，请检查后重试");
         }
     } else if (key == 27) {
-        // 修复：试用版按钮按下后正确启动试用模式
-        StartTrialMode(NULL);
+        // 试用模式 - 也进入安装引导
+        showCDKeyScreen = FALSE;
+        isTrialMode = TRUE;
+        isActivated = FALSE;
+        trialDaysRemaining = 30;
+        ApplyTrialRestrictions();
+        DebugLog("进入试用模式，启动安装引导");
+        InitInstallGuide(NULL);
     } else if (key >= 32 && key <= 126 && strlen(cdKeyInput) < 29) {
         int len = strlen(cdKeyInput);
         
@@ -7212,10 +7654,8 @@ void HandleCDKeyInput(char key) {
             cdKeyInput[len + 1] = '\0';
         }
         
-        // 转换为大写
         cdKeyInput[len] = toupper(key);
         cdKeyInput[len + 1] = '\0';
-        
         cdKeyError = FALSE;
     }
 }
@@ -7230,8 +7670,15 @@ void ShowCDKeyScreen(HWND hwnd) {
     showComplete = FALSE;
     showDesktop = FALSE;
     showShutdown = FALSE;
+    showInstall = FALSE;
     strcpy(cdKeyInput, "");
     cdKeyError = FALSE;
+    
+    // 清除安装状态
+    g_install.isInstalling = FALSE;
+    g_install.isComplete = FALSE;
+    
+    DebugLog("CD-KEY验证界面已显示");
     
     if (hwnd) {
         InvalidateRect(hwnd, NULL, TRUE);
@@ -9321,6 +9768,11 @@ void CloseAllApps(HWND hwnd) {
 
 // 启动OOBE
 void StartOOBE(HWND hwnd) {
+    // 清除安装状态
+    g_install.isInstalling = FALSE;
+    g_install.isComplete = FALSE;
+    showInstall = FALSE;
+    
     showOOBE = TRUE;
     showSecondScreen = FALSE;
     showCDKeyScreen = FALSE;
@@ -9330,9 +9782,13 @@ void StartOOBE(HWND hwnd) {
     strcpy(confirmPassword, "");
     strcpy(computerName, "FOS-PC");
     oobeError = FALSE;
-    skipPasswordSetup = FALSE;  // 重置密码跳过标志
+    skipPasswordSetup = FALSE;
+    
+    DebugLog("OOBE配置向导已启动");
     
     if (hwnd) {
+        // 停止安装引导定时器
+        KillTimer(hwnd, 98);
         InvalidateRect(hwnd, NULL, TRUE);
         UpdateWindow(hwnd);
     }
@@ -9500,9 +9956,8 @@ void EndBootAnimation(HWND hwnd) {
     if (isFirstBoot && !isActivated && !isTrialMode) {
         ShowCDKeyScreen(hwnd);
     } else {
-        showWelcome = TRUE;
-        SetTimer(hwnd, 1, 5000, NULL);
-        SetTimer(hwnd, 3, 100, NULL);
+        // 直接进入安装引导
+        InitInstallGuide(hwnd);
     }
 }
 
@@ -10284,23 +10739,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             DebugLog("========== WM_CREATE 开始 ==========");
             DebugLog("系统启动时间: %d ms", GetTickCount());
             
-            // ---- 初始化阳间版启动动画 ----
-            if (g_useSunlightLauncher) {
-                ZeroMemory(&g_sunlight, sizeof(SunlightState));
-                g_sunlight.startTime = GetTickCount();
-                g_sunlight.lastFrameTime = g_sunlight.startTime;
-                g_sunlight.jellyX = 400;
-                g_sunlight.jellyY = 350;
-                g_sunlight.jellyAlpha = 0.0f;
-                g_sunlight.jellyScale = 0.7f;
-                g_sunlight.jellySpeed = 1.0f;
-                
-                // ===== 强制接管启动 =====
-                showBootAnimation = TRUE;
-                showFOSBeta = FALSE;
-                DebugLog("阳间版启动动画已初始化，showBootAnimation = TRUE");
-            }
-            
             try {
                 DebugLog("加载配置...");
                 LoadConfig();
@@ -10309,15 +10747,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 InitializeSystemInfo();
                 
                 DebugLog("设置定时器...");
-                SetTimer(hwnd, 8, 40, NULL);
                 SetTimer(hwnd, 7, 1000, NULL);
-                
-                // ===== 如果启用阳间版启动动画，立即禁用定时器4和8 =====
-                if (g_useSunlightLauncher) {
-                    KillTimer(hwnd, 4);
-                    KillTimer(hwnd, 8);
-                    DebugLog("已禁用定时器4和8");
-                }
                 
                 DebugLog("初始化IME...");
                 hIMC = ImmGetContext(hwnd);
@@ -10335,9 +10765,94 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 DebugLog("加载日历事件...");
                 LoadCalendarEvents();
                 
-                // ===== 添加动画刷新定时器 =====
-                SetTimer(hwnd, 99, 40, NULL);
-                DebugLog("动画刷新定时器已设置");
+                // ---- 强制关闭所有界面 ----
+                showFOSBeta = FALSE;
+                showBootAnimation = FALSE;
+                showWelcome = FALSE;
+                showSecondScreen = FALSE;
+                showOOBE = FALSE;
+                showDesktop = FALSE;
+                showLogin = FALSE;
+                showShutdown = FALSE;
+                showCDKeyScreen = FALSE;
+                showInstall = FALSE;
+                
+                if (isFirstBoot) {
+                    // ============================================================
+                    //  首次启动：CD-KEY验证 → 安装引导 → OOBE
+                    // ============================================================
+                    DebugLog("首次启动，显示CD-KEY验证界面");
+                    ShowCDKeyScreen(hwnd);
+                } else {
+                    // ============================================================
+                    //  已配置：显示阳间版启动动画（有水母的），然后进入登录界面
+                    // ============================================================
+                    DebugLog("系统已配置，启动阳间版启动动画（水母版）");
+                    
+                    // 初始化阳间版启动动画
+                    ZeroMemory(&g_sunlight, sizeof(SunlightState));
+                    g_sunlight.startTime = GetTickCount();
+                    g_sunlight.lastFrameTime = g_sunlight.startTime;
+                    g_sunlight.jellyX = 400;
+                    g_sunlight.jellyY = 350;
+                    g_sunlight.jellyAlpha = 0.0f;
+                    g_sunlight.jellyScale = 0.7f;
+                    g_sunlight.jellySpeed = 1.0f;
+                    
+                    // 设置特殊日期
+                    time_t now = time(NULL);
+                    tm* t = localtime(&now);
+                    int m = t->tm_mon + 1, d = t->tm_mday, hh = t->tm_hour, min = t->tm_min;
+                    
+                    if (m == 9 && d == 2) {
+                        g_sunlight.isBirthday = TRUE;
+                        g_sunlight.isGoldMode = TRUE;
+                        if (hh >= 14 && hh < 15) { g_sunlight.isBirthHour = TRUE; g_sunlight.isDoubleEgg = TRUE; }
+                        if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
+                    }
+                    if (m == 1 && d == 1) {
+                        g_sunlight.isSubmitDay = TRUE;
+                        g_sunlight.isGoldMode = TRUE;
+                        if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
+                    }
+                    if (m == 5 && d == 20) {
+                        g_sunlight.isLoveDay = TRUE;
+                    }
+                    if (hh == 3 && min == 47 && !g_sunlight.isBirthday && !g_sunlight.isSubmitDay) {
+                        g_sunlight.isSoulHour = TRUE;
+                    }
+                    
+                    if (g_sunlight.isLoveDay) {
+                        g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "developer.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+                        if (!g_sunlight.hPhoto) {
+                            g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "photo.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+                        }
+                        g_sunlight.photoLoaded = (g_sunlight.hPhoto != NULL);
+                    }
+                    
+                    // 随机语录
+                    const char* quotes[] = {
+                        "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+                        "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+                        "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+                        "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+                        "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+                    };
+                    int idx = rand() % 15;
+                    strcpy(g_sunlight.quote, quotes[idx]);
+                    g_sunlight.quoteChangeTime = g_sunlight.startTime;
+                    
+                    // 播放启动音乐
+                    PlaySound(TEXT("startup.wav"), NULL, SND_ASYNC | SND_NODEFAULT);
+                    g_sunlight.musicStarted = TRUE;
+                    
+                    showBootAnimation = TRUE;
+                    showFOSBeta = FALSE;
+                    
+                    // 设置动画刷新定时器 (保持原刷新率：40ms)
+                    SetTimer(hwnd, 99, 40, NULL);
+                    DebugLog("阳间版启动动画已初始化（水母版），刷新间隔40ms");
+                }
                 
                 DebugLog("WM_CREATE 处理完成");
             }
@@ -10357,33 +10872,58 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
         }
         
         case WM_SIZE: {
-            DebugLog("WM_SIZE: 窗口大小改变");
             CreateBackgroundBitmap(hwnd);
             break;
         }
         
         case WM_TIMER: {
-            // ============================================================
-            //  阳间版启动动画：永久屏蔽定时器4和8
-            // ============================================================
-            if (g_useSunlightLauncher) {
-                // 永久屏蔽定时器4和8，不管任何条件
-                if (wParam == 4 || wParam == 8) {
-                    // 完全忽略，不做任何操作
-                    break;
-                }
-                // 动画刷新定时器99
-                if (wParam == 99) {
-                    if (!g_sunlight.isFinished) {
-                        InvalidateRect(hwnd, NULL, FALSE);
-                    } else {
-                        KillTimer(hwnd, 99);
+            // ---- 安装引导更新定时器 (100ms) ----
+            if (wParam == 98) {
+                if (g_install.isInstalling && !g_install.isComplete) {
+                    UpdateInstallState();
+                    if (g_install.isComplete) {
+                        KillTimer(hwnd, 98);
+                        OnInstallComplete(hwnd);
                     }
-                    break;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                break;
+            }
+            
+            // ---- 阳间版启动动画刷新定时器 (40ms) ----
+            if (wParam == 99) {
+                if (!g_sunlight.isFinished) {
+                    InvalidateRect(hwnd, NULL, FALSE);
+                } else {
+                    KillTimer(hwnd, 99);
+                    DebugLog("阳间版启动动画完成，进入登录界面");
+                    showBootAnimation = FALSE;
+                    PlaySound(TEXT(""), NULL, SND_ASYNC | SND_NODEFAULT);
+                    ShowLoginScreen(hwnd);
+                }
+                break;
+            }
+            
+            // ---- 定时器7：桌面时钟更新 (1秒) ----
+            if (wParam == 7) {
+                if (showDesktop) {
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+                break;
+            }
+            
+            // ---- 定时器3：进度条动画 ----
+            if (wParam == 3) {
+                progressValue = (progressValue + 2) % 100;
+                if (!showOOBE && !showComplete && !showDesktop && !showBootAnimation && 
+                    !showLogin && !showCDKeyScreen && !showGameEgg && !showFileEditor && 
+                    !showSettings && !showUSBError && !showBugReporter && !showBugList && 
+                    !showCalendar && !g_install.isInstalling) {
+                    InvalidateRect(hwnd, NULL, FALSE);
                 }
             }
             
-            // ---- 原有定时器代码 ----
+            // ---- 原有定时器1 ----
             if (wParam == 1) {
                 DebugLog("定时器1: 欢迎界面结束");
                 KillTimer(hwnd, 1);
@@ -10392,47 +10932,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 InvalidateRect(hwnd, NULL, TRUE);
                 SetTimer(hwnd, 2, 10000, NULL);
             }
-            else if (wParam == 2) {
+            
+            // ---- 原有定时器2 ----
+            if (wParam == 2) {
                 DebugLog("定时器2: 第二界面结束");
                 KillTimer(hwnd, 2);
                 cleanSecond(hwnd);
             }
-            else if (wParam == 3) {
-                progressValue = (progressValue + 2) % 100;
-                if (!showOOBE && !showComplete && !showDesktop && !showBootAnimation && 
-                    !showLogin && !showCDKeyScreen && !showGameEgg && !showFileEditor && 
-                    !showSettings && !showUSBError && !showBugReporter && !showBugList && 
-                    !showCalendar) {
-                    InvalidateRect(hwnd, NULL, FALSE);
-                }
-            }
-            else if (wParam == 4) {
-                // 已被永久屏蔽，不会执行到这里
-                // 但保留安全代码
-                if (!g_useSunlightLauncher) {
-                    progressValue += 2;
-                    if (progressValue >= 100) {
-                        DebugLog("定时器4: 启动完成");
-                        KillTimer(hwnd, 4);
-                        progressValue = 100;
-                        if (isFirstBoot) {
-                            EndBootAnimation(hwnd);
-                            SetTimer(hwnd, 1, 5000, NULL);
-                            SetTimer(hwnd, 3, 100, NULL);
-                        } else {
-                            ShowLoginScreen(hwnd);
-                        }
+            
+            // ---- 原有定时器4 ----
+            if (wParam == 4) {
+                progressValue += 2;
+                if (progressValue >= 100) {
+                    DebugLog("定时器4: 启动完成");
+                    KillTimer(hwnd, 4);
+                    progressValue = 100;
+                    if (isFirstBoot) {
+                        EndBootAnimation(hwnd);
+                        SetTimer(hwnd, 1, 5000, NULL);
+                        SetTimer(hwnd, 3, 100, NULL);
+                    } else {
+                        ShowLoginScreen(hwnd);
                     }
-                    InvalidateRect(hwnd, NULL, TRUE);
                 }
-                break;
+                InvalidateRect(hwnd, NULL, TRUE);
             }
-            else if (wParam == 5) {
+            
+            // ---- 原有定时器5 (OOBE完成关机) ----
+            if (wParam == 5) {
                 DebugLog("定时器5: OOBE完成，准备关机");
                 KillTimer(hwnd, 5);
                 ShowShutdownAnimation(hwnd);
             }
-            else if (wParam == 6) {
+            
+            // ---- 原有定时器6 ----
+            if (wParam == 6) {
                 shutdownProgress += 2;
                 if (shutdownProgress >= 100) {
                     DebugLog("定时器6: 关机完成");
@@ -10445,32 +10979,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 }
                 InvalidateRect(hwnd, NULL, TRUE);
             }
-            else if (wParam == 7) {
-                if (showDesktop) {
-                    InvalidateRect(hwnd, NULL, TRUE);
+            
+            // ---- 原有定时器8 ----
+            if (wParam == 8) {
+                fosProgressValue += 2;
+                if (fosProgressValue >= 100) {
+                    DebugLog("定时器8: FOS启动完成");
+                    KillTimer(hwnd, 8);
+                    fosProgressValue = 100;
+                    EndFOSBetaAnimation(hwnd);
+                    SetTimer(hwnd, 4, 40, NULL);
                 }
-                break;
+                InvalidateRect(hwnd, NULL, TRUE);
             }
-            else if (wParam == 8) {
-                // 已被永久屏蔽，不会执行到这里
-                if (!g_useSunlightLauncher) {
-                    fosProgressValue += 2;
-                    if (fosProgressValue >= 100) {
-                        DebugLog("定时器8: FOS启动完成");
-                        KillTimer(hwnd, 8);
-                        fosProgressValue = 100;
-                        EndFOSBetaAnimation(hwnd);
-                        SetTimer(hwnd, 4, 40, NULL);
-                    }
-                    InvalidateRect(hwnd, NULL, TRUE);
-                }
-                break;
-            }
-            else if (wParam == 9) {
+            
+            // ---- 原有定时器9 (水母游戏) ----
+            if (wParam == 9) {
                 UpdateJellyfishGame(hwnd);
-                break;
             }
-            else if (wParam == 12 && showPurpleScreen) {
+            
+            // ---- 紫屏定时器 ----
+            if (wParam == 12 && showPurpleScreen) {
                 purpleScreenProgress += 1;
                 if (purpleScreenProgress >= 100) {
                     purpleScreenProgress = 100;
@@ -10595,6 +11124,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             break;
         
         case WM_CHAR: {
+            // ---- 安装界面键盘处理 ----
+            if (g_install.isInstalling && !g_install.isComplete) {
+                char key = (char)wParam;
+                HandleInstallInput(key, hwnd);
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+            
             if (showGameEgg) {
                 HandleJellyfishGameInput(wParam, hwnd);
                 InvalidateRect(hwnd, NULL, TRUE);
@@ -10664,16 +11201,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
         }
         
         case WM_KEYDOWN: {
+            // ---- 安装界面键盘处理（特殊键） ----
+            if (g_install.isInstalling && !g_install.isComplete) {
+                char key = (char)wParam;
+                if (key == VK_SPACE || key == VK_RETURN || key == VK_ESCAPE) {
+                    HandleInstallInput(key, hwnd);
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+                return 0;
+            }
+            
             CheckGameActivation(wParam, hwnd);
             
-            // ============================================================
-            //  阳间版启动动画键盘处理
-            // ============================================================
+            // ---- 阳间版启动动画键盘处理 ----
             if (g_useSunlightLauncher && !g_sunlight.isFinished) {
                 char key = (char)wParam;
                 BOOL ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
                 
-                // ---- 情人节照片模式 ----
                 if (g_sunlight.showLovePhoto) {
                     if (key == VK_ESCAPE) {
                         g_sunlight.showLovePhoto = FALSE;
@@ -10684,7 +11229,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 情人节问答模式 ----
                 if (g_sunlight.showLoveQuestion) {
                     if (key == VK_ESCAPE) {
                         g_sunlight.showLoveQuestion = FALSE;
@@ -10728,7 +11272,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- Ctrl+J 水母弹跳 ----
                 if (ctrl && (key == 'J' || key == 'j')) {
                     if (!g_sunlight.isBouncing) {
                         g_sunlight.isBouncing = TRUE;
@@ -10742,7 +11285,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- Ctrl+C 彩蛋系统 ----
                 if (ctrl && (key == 'C' || key == 'c')) {
                     g_sunlight.eggMsgTime = GetTickCount();
                     strcpy(g_sunlight.eggMsg, "彩蛋系统已加载");
@@ -10752,7 +11294,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- Ctrl+? 特殊彩蛋 ----
                 if (ctrl && key == '?') {
                     g_sunlight.eggMsgTime = GetTickCount();
                     strcpy(g_sunlight.eggMsg, "你终于问了");
@@ -10761,7 +11302,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- Ctrl+Esc 别走彩蛋 ----
                 if (ctrl && key == VK_ESCAPE) {
                     g_sunlight.eggMsgTime = GetTickCount();
                     strcpy(g_sunlight.eggMsg, "别走，系统在等你");
@@ -10770,7 +11310,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 按任意键进入加载（非Ctrl组合键） ----
                 if (!ctrl && g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
                     g_sunlight.isLoading = TRUE;
                     g_sunlight.loadProgress = 0;
@@ -10925,11 +11464,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             int x = LOWORD(lParam);
             int y = HIWORD(lParam);
             
+            // ---- 安装界面鼠标点击 ----
+            if (g_install.isInstalling && !g_install.isComplete) {
+                if (g_install.isPaused) {
+                    g_install.isPaused = FALSE;
+                    g_install.slideStartTime = GetTickCount();
+                    InvalidateRect(hwnd, NULL, FALSE);
+                } else {
+                    HandleInstallInput(VK_RETURN, hwnd);
+                }
+                return 0;
+            }
+            
             DebugLog("鼠标点击: (%d, %d)", x, y);
             
-            // ============================================================
-            //  阳间版启动动画鼠标处理
-            // ============================================================
+            // ---- 阳间版启动动画鼠标处理 ----
             if (g_useSunlightLauncher && !g_sunlight.isFinished) {
                 RECT rect;
                 GetClientRect(hwnd, &rect);
@@ -10940,7 +11489,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 点击Logo ----
                 if (x > cx - 200 && x < cx + 200 && y > cy - 80 && y < cy + 30) {
                     g_sunlight.eggMsgTime = GetTickCount();
                     strcpy(g_sunlight.eggMsg, "JELLYFISH STUDIO");
@@ -10949,7 +11497,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 点击水母 ----
                 int jx = (int)g_sunlight.jellyX;
                 int jy = (int)g_sunlight.jellyY;
                 if (g_sunlight.isBirthday && !g_sunlight.hasEntered && g_sunlight.entryX > -50) {
@@ -10974,7 +11521,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // ---- 点击语录切换 ----
                 if (x > cx - 300 && x < cx + 300 && y > cy + 90 && y < cy + 120) {
                     const char* quotes[] = {
                         "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
@@ -10990,7 +11536,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 点击版本号 ----
                 if (x > 20 && x < 200 && y > rect.bottom - 40 && y < rect.bottom - 10) {
                     g_sunlight.eggMsgTime = GetTickCount();
                     strcpy(g_sunlight.eggMsg, "JammyJellyfish");
@@ -10999,7 +11544,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 双击底部 ----
                 static DWORD lastClick = 0;
                 static int clickCount = 0;
                 if (y > rect.bottom - 60 && y < rect.bottom - 10) {
@@ -11020,7 +11564,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // ---- 任意点击进入加载 ----
                 if (g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
                     g_sunlight.isLoading = TRUE;
                     g_sunlight.loadProgress = 0;
@@ -11376,7 +11919,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 int buttonSpacing = 110;
                 int buttonIndex = 0;
                 
-                // 显示桌面按钮
                 int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
                 if (x >= desktopRect.left && x <= desktopRect.right &&
@@ -11386,7 +11928,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // 文件管理器按钮
                 int fileX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
                 if (x >= fileRect.left && x <= fileRect.right &&
@@ -11396,7 +11937,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // 计算器按钮
                 int calcX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
                 if (x >= calcRect.left && x <= calcRect.right &&
@@ -11406,7 +11946,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // 系统信息按钮
                 int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
                 if (x >= sysinfoRect.left && x <= sysinfoRect.right &&
@@ -11416,7 +11955,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // 设置按钮（专业版）
                 if (isActivated) {
                     int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
@@ -11428,7 +11966,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 水母游戏按钮
                 if (showGameButton) {
                     int gameX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
@@ -11440,7 +11977,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // Bug报告按钮（专业版功能）
                 if (isActivated) {
                     int bugX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
@@ -11450,10 +11986,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                         InvalidateRect(hwnd, &bugRect, TRUE);
                         return 0;
                     }
-                }
-                
-                // Bug列表按钮（专业版功能）
-                if (isActivated) {
+                    
                     int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
                     if (x >= bugListRect.left && x <= bugListRect.right &&
@@ -11464,7 +11997,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 日历按钮
                 int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
                 if (x >= calendarRect.left && x <= calendarRect.right &&
@@ -11474,7 +12006,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     return 0;
                 }
                 
-                // 关机按钮
                 int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
                 if (x >= shutdownRect.left && x <= shutdownRect.right &&
@@ -11615,7 +12146,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 int buttonSpacing = 110;
                 int buttonIndex = 0;
                 
-                // 显示桌面按钮
                 int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
                 if (isDesktopPressed) {
@@ -11628,7 +12158,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 文件管理器按钮
                 int fileX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
                 if (isFileManagerPressed) {
@@ -11641,7 +12170,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 计算器按钮
                 int calcX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
                 if (isCalcPressed) {
@@ -11654,7 +12182,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 系统信息按钮
                 int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
                 if (isSysInfoPressed) {
@@ -11667,7 +12194,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 设置按钮（专业版）
                 if (isActivated) {
                     int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
@@ -11682,7 +12208,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 水母游戏按钮
                 if (showGameButton) {
                     int gameX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
@@ -11704,7 +12229,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // Bug报告按钮
                 if (isActivated) {
                     int bugX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
@@ -11717,10 +12241,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                             ShowBugReporter(hwnd);
                         }
                     }
-                }
-                
-                // Bug列表按钮
-                if (isActivated) {
+                    
                     int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
                     RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
                     if (isBugListPressed) {
@@ -11734,7 +12255,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 日历按钮
                 int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
                 if (isCalendarPressed) {
@@ -11747,7 +12267,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
-                // 关机按钮
                 int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
                 RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
                 if (isShutdownPressed) {
@@ -11903,7 +12422,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
             KillTimer(hwnd, 7);
             KillTimer(hwnd, 8);
             KillTimer(hwnd, 9);
-            KillTimer(hwnd, 99);  // 动画刷新定时器
+            KillTimer(hwnd, 98);  // 安装引导定时器
+            KillTimer(hwnd, 99);  // 阳间版启动动画定时器
             
             if (hIMC) {
                 ImmReleaseContext(hwnd, hIMC);
@@ -11917,7 +12437,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 DeleteObject(hEthernetBackground);
             }
             
-            // ---- 释放阳间版启动动画资源 ----
             if (g_sunlight.hPhoto) {
                 DeleteObject(g_sunlight.hPhoto);
                 g_sunlight.hPhoto = NULL;
@@ -11955,22 +12474,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                 return 0;
             }
             
-            // ============================================================
-            //  阳间版启动动画（优先绘制）
-            // ============================================================
-            if (g_useSunlightLauncher && !g_sunlight.isFinished) {
-                DrawSunlightLauncher(hdc, rect);
-                if (g_sunlight.isFinished) {
-                    showBootAnimation = FALSE;
-                    PlaySound(TEXT(""), NULL, SND_ASYNC | SND_NODEFAULT);
-                    // 进入登录界面
-                    ShowLoginScreen(hwnd);
-                }
+            // ---- 1. 安装引导（最高优先级） ----
+            if (g_install.isInstalling && !g_install.isComplete) {
+                DrawInstallSlide(hdc, rect);
                 EndPaint(hwnd, &ps);
                 return 0;
             }
             
-            // ---- 原有绘制代码 ----
+            if (g_install.isComplete && !showOOBE) {
+                DrawInstallSlide(hdc, rect);
+                EndPaint(hwnd, &ps);
+                return 0;
+            }
+            
+            // ---- 2. 阳间版启动动画（有水母的，已配置时显示） ----
+            if (g_useSunlightLauncher && !g_sunlight.isFinished && showBootAnimation) {
+                DrawSunlightLauncher(hdc, rect);
+                EndPaint(hwnd, &ps);
+                return 0;
+            }
+            
+            // ---- 3. 原有绘制代码 ----
             if (showGameEgg) {
                 DrawJellyfishGame(hdc, hwnd);
                 EndPaint(hwnd, &ps);
@@ -12091,7 +12615,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
                     TextOut(hdc, centerX - 200, centerY - 50, "欢迎您，", 8);
                     TextOut(hdc, centerX - 120, centerY - 50, username, strlen(username));
                     TextOut(hdc, centerX - 200, centerY, "您的账户已成功创建", 18);
-                    TextOut(hdc, centerX - 200, centerY + 50, "系统即将重启...", 14);
+                    TextOut(hdc, centerX - 200, centerY + 50, "请手动关闭程序", 14);
                     SelectObject(hdc, hOldFont);
                     
                     DeleteObject(hTitleFont);

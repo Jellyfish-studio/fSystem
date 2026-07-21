@@ -1,10 +1,18 @@
-/* THIS FILE WILL BE OVERWRITTEN BY DEV-C++ */
+/* THIS FILE WILL BE OVERWRITTEN BY Red Panda C++ */
 /* DO NOT EDIT! */
 
 #include <windows.h> // include for version info constants
 
+#include "f1.0_private.rc"
 
-A ICON "fϵͳ1.0.ico"
+A ICON "app.ico"
+
+//
+// SUPPORT FOR WINDOWS XP THEMES:
+// THIS WILL MAKE THE PROGRAM USE THE COMMON CONTROLS
+// LIBRARY VERSION 6.0 (IF IT IS AVAILABLE)
+//
+1 24 "fϵͳ1.0.exe.Manifest"
 
 //
 // TO CHANGE VERSION INFORMATION, EDIT PROJECT OPTIONS...
@@ -16,13 +24,13 @@ FILETYPE VFT_APP
 {
   BLOCK "StringFileInfo"
   {
-    BLOCK "080404E4"
+    BLOCK "080404e4"
     {
       VALUE "CompanyName", "Jellyfish Studio"
       VALUE "FileVersion", "1.0.400.6666"
       VALUE "FileDescription", "fϵͳ1.0-codename nori"
       VALUE "InternalName", "fOS 1.0.exe"
-      VALUE "LegalCopyright", "Copyright (C) 2025 Jellyfish Studio"
+      VALUE "LegalCopyright", "Copyright (C) 2025-2026 Jellyfish Studio"
       VALUE "LegalTrademarks", "fϵͳ1.0-codename nori"
       VALUE "OriginalFilename", "fOS 1.0.exe"
       VALUE "ProductName", "fϵͳ1.0-codename nori"

@@ -1,62 +1,206 @@
 [Project]
-FileName=fϵͳ1.0.dev
-Name=fϵͳ1.0
-Type=0
-Ver=2
-ObjFiles=
-Includes=
-Libs=
-PrivateResource=fϵͳ1.0_private.rc
-ResourceIncludes=
-MakeIncludes=
-Compiler=
-CppCompiler=
-Linker=-lwinmm_@@_-limm32_@@_
-IsCpp=1
-Icon=fϵͳ1.0.ico
-ExeOutput=
-ObjectOutput=
-LogOutput=
-LogOutputEnabled=0
-OverrideOutput=0
-OverrideOutputName=fϵͳ1.0.exe
-HostApplication=
-UseCustomMakefile=0
-CustomMakefile=
-CommandLine=
-Folders=
-IncludeVersionInfo=1
-SupportXPThemes=0
-CompilerSet=1
-CompilerSettings=00000000c0000000101000000
-UnitCount=1
+FileName = f系统1.0.dev
+Name = f系统1.0
+Type = 0
+Ver = 3
+ObjFiles = 
+Includes = 
+Libs = 
+PrivateResource = fϵͳ1.0_private.rc
+ResourceIncludes = 
+MakeIncludes = 
+Compiler = 
+CppCompiler = 
+Linker = -lwinmm_@@_-limm32_@@_
+IsCpp = 1
+Icon = app.ico
+ExeOutput = 
+ObjectOutput = 
+LogOutput = 
+LogOutputEnabled = 0
+OverrideOutput = 0
+OverrideOutputName = f系统1.0.exe
+HostApplication = 
+UseCustomMakefile = 1
+CustomMakefile = Makefile.win
+CommandLine = 
+Folders = 
+IncludeVersionInfo = 1
+SupportXPThemes = 1
+CompilerSet = 0
+UnitCount = 8
+Bins = 
+ResourceCommand = 
+UsePrecompiledHeader = 0
+PrecompiledHeader = 
+StaticLink = 1
+AddCharset = 1
+ExecEncoding = UTF-8
+Encoding = UTF-8
+ModelType = 1
+ClassBrowserType = 0
+AllowParallelBuilding = true
+ParellelBuildingJobs = 0
+UseUTF8 = 1
+
 
 [VersionInfo]
-Major=1
-Minor=0
-Release=400
-Build=6666
-LanguageID=2052
-CharsetID=1252
-CompanyName=Jellyfish Studio
-FileVersion=1.0.400.6666
-FileDescription=fϵͳ1.0-codename nori
-InternalName=fOS 1.0.exe
-LegalCopyright=Copyright (C) 2025 Jellyfish Studio
-LegalTrademarks=fϵͳ1.0-codename nori
-OriginalFilename=fOS 1.0.exe
-ProductName=fϵͳ1.0-codename nori
-ProductVersion=1.0.400.6666
-AutoIncBuildNr=0
-SyncProduct=1
+Major = 1
+Minor = 0
+Release = 400
+Build = 6666
+LanguageID = 2052
+CharsetID = 1252
+CompanyName = Jellyfish Studio
+FileVersion = 1.0.400.6666
+FileDescription = f系统1.0-codename nori
+InternalName = fOS 1.0.exe
+LegalCopyright = Copyright (C) 2025-2026 Jellyfish Studio
+LegalTrademarks = f系统1.0-codename nori
+OriginalFilename = fOS 1.0.exe
+ProductName = f系统1.0-codename nori
+ProductVersion = 1.0.400.6666
+AutoIncBuildNr = 0
+SyncProduct = 1
+
 
 [Unit1]
-FileName=main.cpp
-CompileCpp=1
-Folder=
-Compile=1
-Link=1
-Priority=1000
-OverrideBuildCmd=0
-BuildCmd=
+FileName = f系统1.0.layout
+CompileCpp = 1
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = 
 
+
+[Unit2]
+FileName = f1.0_private.rc
+Folder = Resources
+Compile = 1
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = 
+
+
+[Unit3]
+FileName = Makefile.win
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = UTF-8
+
+
+[Unit4]
+FileName = main.cpp
+CompileCpp = 1
+Folder = 
+Compile = 1
+Link = 1
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = UTF-8
+
+
+[Unit5]
+FileName = f1.0_private.h
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = 
+CompileCpp = 0
+
+
+[Unit6]
+FileName = LICENSE
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = 
+
+
+[Unit7]
+FileName = f系统1.0.ico
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = 
+
+
+[Unit8]
+FileName = test_byte_error.txt
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = UTF-8
+CompileCpp = 0
+
+
+[Unit9]
+FileName = f系统1.0_private.h
+CompileCpp = 0
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = UTF-8
+
+
+[CompilerSettings]
+c_cmd_opt_std = 
+cc_cmd_opt_abort_on_error = 
+cc_cmd_opt_address_sanitizer = 
+cc_cmd_opt_check_iso_conformance = 
+cc_cmd_opt_debug_info = on
+cc_cmd_opt_inhibit_all_warning = 
+cc_cmd_opt_instruction = 
+cc_cmd_opt_no_ms_extensions = on
+cc_cmd_opt_optimize = 2
+cc_cmd_opt_pointer_size = 
+cc_cmd_opt_profile_info = on
+cc_cmd_opt_stack_protector = 
+cc_cmd_opt_std = c++11
+cc_cmd_opt_syntax_only = 
+cc_cmd_opt_use_pipe = on
+cc_cmd_opt_warning_all = 
+cc_cmd_opt_warning_as_error = 
+cc_cmd_opt_warning_extra = 
+cc_opt_enable_gcc_import_std = 
+cc_opt_error_implicit_int = on
+cc_opt_error_return_type = on
+cc_opt_error_vla = on
+link_cmd_opt_no_console = 
+link_cmd_opt_no_link_stdlib = 
+link_cmd_opt_stack_size = 12
+link_cmd_opt_strip_exe = on

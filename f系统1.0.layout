@@ -1,18 +1,51 @@
-[Editors]
-Order=0
-Focused=0
-[Editor_0]
-CursorCol=98
-CursorRow=1733
-TopLine=1713
-LeftChar=1
-[Editor_2]
-CursorCol=34
-CursorRow=31
-TopLine=9
-LeftChar=1
-[Editor_1]
-CursorCol=1
-CursorRow=1
-TopLine=1
-LeftChar=1
+[
+    {
+        "caretX": 12,
+        "caretY": 6,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/f1.0_private.rc",
+        "focused": false,
+        "isOpen": true,
+        "left": 0,
+        "order": 1,
+        "top": 160
+    },
+    {
+        "caretX": 19,
+        "caretY": 18,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/Makefile.win",
+        "focused": false,
+        "isOpen": true,
+        "left": 0,
+        "order": 2,
+        "top": 240
+    },
+    {
+        "caretX": 1,
+        "caretY": 821,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/main.cpp",
+        "focused": true,
+        "isOpen": true,
+        "left": 0,
+        "order": 0,
+        "top": 16300
+    },
+    {
+        "caretX": 11,
+        "caretY": 23,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/f1.0_private.h",
+        "focused": false,
+        "isOpen": true,
+        "left": 0,
+        "order": 3,
+        "top": 0
+    },
+    {
+        "caretX": 2,
+        "caretY": 4,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/test_byte_error.txt",
+        "focused": false,
+        "isOpen": false,
+        "left": 0,
+        "top": 0
+    }
+]

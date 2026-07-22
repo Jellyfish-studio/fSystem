@@ -1,4 +1,4 @@
-# Project: f系统1.0
+# Project: fϵͳ1.0
 # Makefile created by Red Panda C++ 3.4.3279
 
 CXX      = "g++.exe"
@@ -15,9 +15,9 @@ NASM_FLAGS   =  "-f" "elf64"
 WINDRESFLAGS = 
 RES      = f1.0_private.res
 OBJ      = main.o $(RES)
-BIN      = fSystem1.0.exe
+BIN      = fϵͳ1.0.exe
 LINKOBJ  = "main.o" "f1.0_private.res"
-CLEANOBJ = "main.o" "f1.0_private.res" "f系统1.0.exe"
+CLEANOBJ = "main.o" "f1.0_private.res" "fϵͳ1.0.exe"
 
 .PHONY: all all-before all-after clean clean-custom
 
@@ -26,13 +26,13 @@ all: all-before $(BIN) all-after
 clean: clean-custom
 	-$(RM) $(CLEANOBJ) >NUL 2>&1
 
-fSystem1.0.exe: $(OBJ)
+fϵͳ1.0.exe: $(OBJ)
 
-	$(CXX) $(LINKOBJ) -o "fSystem1.0.exe" $(LIBS)
+	$(CXX) $(LINKOBJ) -o "fϵͳ1.0.exe" $(LIBS)
 
 main.o: main.cpp
 	$(CXX) -c "main.cpp" -o "main.o" $(CXXFLAGS)  -finput-charset=UTF-8 -fexec-charset=gbk
 
-f系统1.0_private.res: f1.0_private.rc f1.0_private.rc 
+fϵͳ1.0_private.res: f1.0_private.rc f1.0_private.rc 
 	$(WINDRES) -i "f1.0_private.rc" --input-format=rc -o "f1.0_private.res" -O coff $(WINDRESFLAGS) 
 

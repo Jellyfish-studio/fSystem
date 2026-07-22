@@ -1,29 +1,27 @@
 [
     {
-        "caretX": 12,
-        "caretY": 6,
-        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/f1.0_private.rc",
+        "caretX": 2,
+        "caretY": 4,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/test_byte_error.txt",
         "focused": false,
-        "isOpen": true,
+        "isOpen": false,
         "left": 0,
-        "order": 1,
-        "top": 160
+        "top": 0
     },
     {
-        "caretX": 19,
-        "caretY": 18,
+        "caretX": 27,
+        "caretY": 31,
         "filename": "C:/Users/ning/Desktop/GitHub/fSystem/Makefile.win",
         "focused": false,
-        "isOpen": true,
+        "isOpen": false,
         "left": 0,
-        "order": 2,
-        "top": 240
+        "top": 120
     },
     {
         "caretX": 1,
         "caretY": 821,
         "filename": "C:/Users/ning/Desktop/GitHub/fSystem/main.cpp",
-        "focused": true,
+        "focused": false,
         "isOpen": true,
         "left": 0,
         "order": 0,
@@ -33,19 +31,19 @@
         "caretX": 11,
         "caretY": 23,
         "filename": "C:/Users/ning/Desktop/GitHub/fSystem/f1.0_private.h",
-        "focused": false,
+        "focused": true,
         "isOpen": true,
         "left": 0,
-        "order": 3,
+        "order": 1,
         "top": 0
     },
     {
-        "caretX": 2,
-        "caretY": 4,
-        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/test_byte_error.txt",
+        "caretX": 12,
+        "caretY": 6,
+        "filename": "C:/Users/ning/Desktop/GitHub/fSystem/f1.0_private.rc",
         "focused": false,
         "isOpen": false,
         "left": 0,
-        "top": 0
+        "top": 100
     }
 ]

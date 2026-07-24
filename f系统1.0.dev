@@ -65,7 +65,7 @@ SyncProduct = 1
 
 
 [Unit1]
-FileName = f系统1.0.layout
+FileName = LICENSE
 CompileCpp = 1
 Folder = 
 Compile = 0
@@ -74,10 +74,49 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = 
+RealEncoding = ASCII
 
 
 [Unit2]
+FileName = f系统1.0.layout
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = ASCII
+CompileCpp = 0
+
+
+[Unit3]
+FileName = main.cpp
+Folder = 
+Compile = 1
+Link = 1
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = UTF-8
+RealEncoding = UTF-8
+CompileCpp = 1
+
+
+[Unit4]
+FileName = test_byte_error.txt
+CompileCpp = 1
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = UTF-8
+
+
+[Unit5]
 FileName = f1.0_private.rc
 Folder = Resources
 Compile = 1
@@ -86,10 +125,11 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = 
+RealEncoding = UTF-8
+CompileCpp = 0
 
 
-[Unit3]
+[Unit6]
 FileName = Makefile.win
 Folder = 
 Compile = 0
@@ -101,20 +141,7 @@ FileEncoding = PROJECT
 RealEncoding = UTF-8
 
 
-[Unit4]
-FileName = main.cpp
-CompileCpp = 1
-Folder = 
-Compile = 1
-Link = 1
-Priority = 1000
-OverrideBuildCmd = 0
-BuildCmd = 
-FileEncoding = PROJECT
-RealEncoding = UTF-8
-
-
-[Unit5]
+[Unit7]
 FileName = f1.0_private.h
 Folder = 
 Compile = 0
@@ -123,23 +150,11 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = 
+RealEncoding = UTF-8
 CompileCpp = 0
 
 
-[Unit6]
-FileName = LICENSE
-Folder = 
-Compile = 0
-Link = 0
-Priority = 1000
-OverrideBuildCmd = 0
-BuildCmd = 
-FileEncoding = PROJECT
-RealEncoding = 
-
-
-[Unit7]
+[Unit8]
 FileName = f系统1.0.ico
 Folder = 
 Compile = 0
@@ -148,20 +163,8 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = 
-
-
-[Unit8]
-FileName = test_byte_error.txt
-Folder = 
-Compile = 0
-Link = 0
-Priority = 1000
-OverrideBuildCmd = 0
-BuildCmd = 
-FileEncoding = PROJECT
-RealEncoding = UTF-8
-CompileCpp = 0
+RealEncoding = ASCII
+CompileCpp = 1
 
 
 [Unit9]

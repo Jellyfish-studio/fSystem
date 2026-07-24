@@ -104,6 +104,33 @@
 #define EDITOR_SELECTION RGB(200, 220, 255)
 #define SETTINGS_BG RGB(250, 250, 255)
 
+// ============================================================
+//  状态栏和开始菜单 - 宏定义
+// ============================================================
+
+// 状态栏规格
+#define STATUSBAR_HEIGHT 40
+#define STATUSBAR_BG_ALPHA 180
+
+// 开始菜单规格
+#define STARTMENU_WIDTH 220
+#define STARTMENU_MAX_HEIGHT 420
+#define STARTMENU_ITEM_HEIGHT 38
+#define STARTMENU_CORNER_RADIUS 8
+#define STARTMENU_PADDING 4
+
+// 颜色定义
+#define STATUSBAR_BG_COLOR RGB(0, 0, 0)
+#define MENU_BG_COLOR RGB(30, 30, 50)
+#define MENU_HOVER_COLOR RGB(60, 80, 140)
+#define MENU_SEPARATOR_COLOR RGB(80, 80, 80)
+#define MENU_TEXT_COLOR RGB(255, 255, 255)
+#define MENU_TEXT_HOVER_COLOR RGB(180, 210, 255)
+
+// 状态栏图标大小
+#define STATUSBAR_ICON_SIZE 20
+#define STATUSBAR_ICON_SPACING 8
+
 using namespace std; // 使用std命名空间
 
 // ============================================================
@@ -343,7 +370,7 @@ static const InstallSlide g_slides[INSTALL_SLIDE_COUNT] = {
      "水母引擎已加载。守慧已就位。\n字母弹动系统已部署。阳间规则已确认。\n错误处理系统已安装。音乐系统已配置。\n一切都已准备就绪。",
      "正在进行最终检查...", 85},
     {"请记住",
-     "你是开发者。\n你是创作者。\n你是这个系统的主人。\n你写下的每一行代码，都比你想象的更有力量。",
+     "你是开发者。\n你是创作者。\n你是这个系统的主人。\n你写下的每一行代码，都比你想象的更有力量。\n送给你的一句话：Change is constant.--出自GitHub。",
      "正在写入最终确认...", 88},
     {"最后的叮嘱",
      "如果有一天你不想用了，可以删除它。\n如果有一天你想重新开始，可以重新安装它。\n它不会阻止你，不会挽留你，不会记录你离开的时间。\n它只是你创造的一个工具，一个伙伴，一个水母。",
@@ -581,6 +608,68 @@ static BOOL isCalendarPressed = FALSE;
 static BOOL isClockHovered = FALSE;
 static BOOL isClockPressed = FALSE;
 
+// ============================================================
+//  状态栏和开始菜单 - 全局变量
+// ============================================================
+
+// 状态栏状态
+static BOOL showStartMenu = FALSE;
+static BOOL isStartButtonHovered = FALSE;
+static BOOL isStartButtonPressed = FALSE;
+
+// 开始菜单项悬停
+static int startMenuHoverIndex = -1;
+
+// 状态栏图标悬停
+static BOOL isNetworkHovered = FALSE;
+static BOOL isVolumeHovered = FALSE;
+static BOOL isDisplayHovered = FALSE;
+static BOOL isSettingsHovered = FALSE;
+static BOOL isNotificationHovered = FALSE;
+static BOOL isTimeHovered = FALSE;
+
+// 网络状态
+static BOOL isNetworkConnected = TRUE;
+static char networkStatus[20] = "已连接";
+
+// 音量控制
+static int volumeLevel = 75;
+static BOOL showVolumeSlider = FALSE;
+
+// 通知列表
+static BOOL showNotifications = FALSE;
+static int notificationCount = 0;
+static char notifications[10][200];
+
+// ============================================================
+//  开始菜单项定义
+// ============================================================
+
+typedef struct {
+	const wchar_t* icon;      // 改为 wchar_t*
+	const wchar_t* name;      // 改为 wchar_t*
+	const char* command;
+	BOOL isSeparator;
+} StartMenuItem;
+
+// ============================================================
+//  使用 \U 转义序列（8位）
+// ============================================================
+
+static const StartMenuItem startMenuItems[] = {
+	{L"\U0001F5D5", L"显示桌面", "desktop", FALSE},
+	{L"\U0001F9EE", L"计算器", "calculator", FALSE},
+	{L"\U0001F4C1", L"文件管理器", "filemanager", FALSE},
+	{L"\U0001F4CB", L"系统信息", "sysinfo", FALSE},
+	{L"\u2699", L"系统设置", "settings", FALSE},
+	{L"\U0001F41B", L"Bug报告", "bugreport", FALSE},
+	{L"\U0001F4C5", L"日历", "calendar", FALSE},
+	{L"\U0001F551", L"时钟", "clock", FALSE},
+	{L"", L"", "", TRUE},
+	{L"\U0001F512", L"关机", "shutdown", FALSE}
+};
+
+#define STARTMENU_ITEM_COUNT (sizeof(startMenuItems) / sizeof(StartMenuItem))
 // 障碍物结构
 typedef struct {
     int x, y, width, height;
@@ -787,7 +876,7 @@ static BOOL isDesktopHovered = FALSE;
 static BOOL isDesktopPressed = FALSE;
 static BOOL isGameHovered = FALSE;      // 水母游戏按钮悬停状态
 static BOOL isGamePressed = FALSE;      // 水母游戏按钮按下状态
-static BOOL isSettingsHovered = FALSE;  // 设置按钮悬停状态
+//static BOOL isSettingsHovered = FALSE;  // 设置按钮悬停状态
 static BOOL isSettingsPressed = FALSE;  // 设置按钮按下状态
 
 // 计算器变量
@@ -1110,6 +1199,63 @@ void UpdateStopwatch();
 void UpdateTimer();
 void FormatTimeString(char* buffer, DWORD milliseconds);
 
+// ============================================================
+//  状态栏和开始菜单 - 函数声明
+// ============================================================
+
+// 状态栏绘制
+void DrawStatusBar(HDC hdc, RECT rect);
+void DrawStatusBarBackground(HDC hdc, RECT rect);
+void DrawStartButton(HDC hdc, int x, int y);
+void DrawStatusBarIcons(HDC hdc, int x, int y);
+void DrawDateTime(HDC hdc, int x, int y);
+void DrawNetworkIcon(HDC hdc, int x, int y);
+void DrawVolumeIcon(HDC hdc, int x, int y);
+void DrawDisplayIcon(HDC hdc, int x, int y);
+void DrawSettingsIcon(HDC hdc, int x, int y);
+void DrawNotificationIcon(HDC hdc, int x, int y);
+
+// 开始菜单绘制
+void DrawStartMenu(HDC hdc, int x, int y);
+void DrawStartMenuItem(HDC hdc, int x, int y, int width, int height, 
+					   const StartMenuItem* item, BOOL hovered);
+
+// 状态栏交互
+void HandleStatusBarClick(int x, int y);
+void HandleStartMenuClick(int x, int y);
+void HandleStartMenuMouseMove(int x, int y);
+void ToggleStartMenu();
+void CloseStartMenu();
+
+// 功能执行
+void ExecuteStartMenuItem(const char* command);
+void UpdateDateTime();
+void AddNotification(const char* message);
+
+// ============================================================
+//  时钟软件函数声明（如果尚未声明）
+// ============================================================
+void ShowClock(HWND hwnd);
+
+// ============================================================
+//  时钟软件全局变量
+// ============================================================
+//static BOOL showClock = FALSE;
+//static int clockView = 0;
+
+// ============================================================
+//  时钟软件函数实现
+// ============================================================
+void ShowClock(HWND hwnd) {
+	DebugLog("ShowClock: 打开时钟");
+	CloseAllApps(hwnd);
+	showClock = TRUE;
+	if (hwnd) {
+		InvalidateRect(hwnd, NULL, TRUE);
+		UpdateWindow(hwnd);
+	}
+}
+
 // 应用程序矩形区域
 typedef struct {
     int left;
@@ -1117,6 +1263,389 @@ typedef struct {
     int right;
     int bottom;
 } AppRect;
+
+// ============================================================
+//  时钟软件 - 完整实现
+// ============================================================
+
+// 时钟软件全局变量（如果尚未定义）
+//#ifndef CLOCK_GLOBALS_DEFINED
+//#define CLOCK_GLOBALS_DEFINED
+//static BOOL showClock = FALSE;
+//static int clockView = 0;        // 0:模拟时钟 1:数字时钟 2:秒表
+//static BOOL stopwatchRunning = FALSE;
+//static DWORD stopwatchStartTime = 0;
+//static DWORD stopwatchElapsed = 0;
+//#endif
+
+// 绘制模拟时钟
+void DrawAnalogClock(HDC hdc, int centerX, int centerY) {
+	int radius = 120;
+	int cx = centerX;
+	int cy = centerY - 20;
+	
+	// 获取当前时间
+	time_t now;
+	struct tm* timeinfo;
+	time(&now);
+	timeinfo = localtime(&now);
+	
+	int hour = timeinfo->tm_hour % 12;
+	int minute = timeinfo->tm_min;
+	int second = timeinfo->tm_sec;
+	
+	// 绘制表盘背景
+	HPEN hOldPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
+	HBRUSH hClockBrush = CreateSolidBrush(RGB(255, 255, 255));
+	SelectObject(hdc, hClockBrush);
+	Ellipse(hdc, cx - radius, cy - radius, cx + radius, cy + radius);
+	DeleteObject(hClockBrush);
+	
+	// 绘制表盘边框
+	HPEN hBorderPen = CreatePen(PS_SOLID, 3, RGB(50, 50, 50));
+	SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Ellipse(hdc, cx - radius, cy - radius, cx + radius, cy + radius);
+	DeleteObject(hBorderPen);
+	
+	// 绘制刻度
+	HPEN hTickPen = CreatePen(PS_SOLID, 2, RGB(0, 0, 0));
+	SelectObject(hdc, hTickPen);
+	
+	for (int i = 0; i < 60; i++) {
+		double angle = i * 3.14159 / 30 - 3.14159 / 2;
+		int isHour = (i % 5 == 0);
+		int tickLen = isHour ? 15 : 8;
+		int innerRadius = radius - (isHour ? 25 : 18);
+		
+		int x1 = cx + (int)(innerRadius * cos(angle));
+		int y1 = cy + (int)(innerRadius * sin(angle));
+		int x2 = cx + (int)((innerRadius + tickLen) * cos(angle));
+		int y2 = cy + (int)((innerRadius + tickLen) * sin(angle));
+		
+		MoveToEx(hdc, x1, y1, NULL);
+		LineTo(hdc, x2, y2);
+	}
+	DeleteObject(hTickPen);
+	
+	// 绘制数字
+	HFONT hNumFont = CreateFont(18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hNumFont);
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(0, 0, 0));
+	
+	for (int i = 1; i <= 12; i++) {
+		double angle = i * 3.14159 / 6 - 3.14159 / 2;
+		int numRadius = radius - 35;
+		int x1 = cx + (int)(numRadius * cos(angle));
+		int y1 = cy + (int)(numRadius * sin(angle));
+		char numStr[3];
+		sprintf(numStr, "%d", i);
+		int textWidth = GetTextWidth(hdc, numStr);
+		TextOut(hdc, x1 - textWidth/2, y1 - 9, numStr, strlen(numStr));
+	}
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hNumFont);
+	
+	// 绘制时针
+	double hourAngle = (hour * 30 + minute * 0.5) * 3.14159 / 180 - 3.14159 / 2;
+	HPEN hHourPen = CreatePen(PS_SOLID, 5, RGB(0, 0, 0));
+	SelectObject(hdc, hHourPen);
+	int hourLen = radius - 50;
+	MoveToEx(hdc, cx, cy, NULL);
+	LineTo(hdc, cx + (int)(hourLen * cos(hourAngle)), cy + (int)(hourLen * sin(hourAngle)));
+	DeleteObject(hHourPen);
+	
+	// 绘制分针
+	double minuteAngle = minute * 6 * 3.14159 / 180 - 3.14159 / 2;
+	HPEN hMinutePen = CreatePen(PS_SOLID, 3, RGB(0, 0, 200));
+	SelectObject(hdc, hMinutePen);
+	int minuteLen = radius - 30;
+	MoveToEx(hdc, cx, cy, NULL);
+	LineTo(hdc, cx + (int)(minuteLen * cos(minuteAngle)), cy + (int)(minuteLen * sin(minuteAngle)));
+	DeleteObject(hMinutePen);
+	
+	// 绘制秒针
+	double secondAngle = second * 6 * 3.14159 / 180 - 3.14159 / 2;
+	HPEN hSecondPen = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+	SelectObject(hdc, hSecondPen);
+	int secondLen = radius - 20;
+	MoveToEx(hdc, cx, cy, NULL);
+	LineTo(hdc, cx + (int)(secondLen * cos(secondAngle)), cy + (int)(secondLen * sin(secondAngle)));
+	DeleteObject(hSecondPen);
+	
+	// 绘制中心点
+	HBRUSH hCenterBrush = CreateSolidBrush(RGB(0, 0, 0));
+	SelectObject(hdc, hCenterBrush);
+	Ellipse(hdc, cx - 5, cy - 5, cx + 5, cy + 5);
+	DeleteObject(hCenterBrush);
+	
+	SelectObject(hdc, hOldPen);
+}
+
+// 绘制数字时钟
+void DrawDigitalClock(HDC hdc, int centerX, int centerY) {
+	time_t now;
+	struct tm* timeinfo;
+	time(&now);
+	timeinfo = localtime(&now);
+	
+	char timeStr[20];
+	char dateStr[50];
+	strftime(timeStr, 20, "%H:%M:%S", timeinfo);
+	strftime(dateStr, 50, "%Y年%m月%d日 %A", timeinfo);
+	
+	HFONT hTimeFont = CreateFont(72, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hDateFont = CreateFont(24, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 GB2312_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+	
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(0, 0, 0));
+	
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTimeFont);
+	int timeWidth = GetTextWidth(hdc, timeStr);
+	TextOut(hdc, centerX - timeWidth/2, centerY - 80, timeStr, strlen(timeStr));
+	
+	SelectObject(hdc, hDateFont);
+	int dateWidth = GetTextWidth(hdc, dateStr);
+	TextOut(hdc, centerX - dateWidth/2, centerY + 20, dateStr, strlen(dateStr));
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTimeFont);
+	DeleteObject(hDateFont);
+}
+
+// 绘制秒表
+void DrawStopwatch(HDC hdc, int centerX, int centerY) {
+	char timeStr[20];
+	DWORD elapsed = stopwatchRunning ? (GetTickCount() - stopwatchStartTime + stopwatchElapsed) : stopwatchElapsed;
+	
+	int milliseconds = elapsed % 1000;
+	int seconds = (elapsed / 1000) % 60;
+	int minutes = (elapsed / 60000) % 60;
+	int hours = elapsed / 3600000;
+	
+	if (hours > 0) {
+		sprintf(timeStr, "%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds);
+	} else {
+		sprintf(timeStr, "%02d:%02d.%03d", minutes, seconds, milliseconds);
+	}
+	
+	HFONT hTimeFont = CreateFont(48, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hBtnFont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(0, 0, 0));
+	
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTimeFont);
+	int timeWidth = GetTextWidth(hdc, timeStr);
+	TextOut(hdc, centerX - timeWidth/2, centerY - 60, timeStr, strlen(timeStr));
+	
+	// 按钮
+	int btnWidth = 80;
+	int btnHeight = 35;
+	int btnY = centerY + 40;
+	int spacing = 100;
+	
+	SelectObject(hdc, hBtnFont);
+	
+	// 开始/停止按钮
+	RECT startRect = {centerX - spacing, btnY, centerX - spacing + btnWidth, btnY + btnHeight};
+	HBRUSH hStartBrush = CreateSolidBrush(stopwatchRunning ? RGB(255, 100, 100) : RGB(100, 200, 100));
+	FillRect(hdc, &startRect, hStartBrush);
+	DeleteObject(hStartBrush);
+	HPEN hBtnPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBtnPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, startRect.left, startRect.top, startRect.right, startRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBtnPen);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	const char* startText = stopwatchRunning ? "停止" : "开始";
+	int textWidth = GetTextWidth(hdc, startText);
+	TextOut(hdc, centerX - spacing + (btnWidth - textWidth)/2, btnY + 8, startText, strlen(startText));
+	
+	// 重置按钮
+	RECT resetRect = {centerX + spacing - btnWidth, btnY, centerX + spacing, btnY + btnHeight};
+	HBRUSH hResetBrush = CreateSolidBrush(RGB(200, 200, 100));
+	FillRect(hdc, &resetRect, hResetBrush);
+	DeleteObject(hResetBrush);
+	HPEN hResetPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+	hOldPen = (HPEN)SelectObject(hdc, hResetPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, resetRect.left, resetRect.top, resetRect.right, resetRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hResetPen);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	TextOut(hdc, centerX + spacing - btnWidth + 20, btnY + 8, "重置", 4);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTimeFont);
+	DeleteObject(hBtnFont);
+}
+
+// 绘制时钟主界面
+void DrawClock(HDC hdc, int centerX, int centerY) {
+	RECT clockRect = {centerX - 250, centerY - 200, centerX + 250, centerY + 200};
+	
+	// 背景
+	HBRUSH hBgBrush = CreateSolidBrush(RGB(250, 250, 255));
+	FillRect(hdc, &clockRect, hBgBrush);
+	DeleteObject(hBgBrush);
+	
+	// 边框
+	HPEN hBorderPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 200));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, clockRect.left, clockRect.top, clockRect.right, clockRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	// 标题栏
+	RECT titleRect = {clockRect.left, clockRect.top, clockRect.right, clockRect.top + 35};
+	HBRUSH hTitleBrush = CreateSolidBrush(RGB(70, 130, 180));
+	FillRect(hdc, &titleRect, hTitleBrush);
+	DeleteObject(hTitleBrush);
+	
+	SetTextColor(hdc, RGB(255, 255, 255));
+	SetBkMode(hdc, TRANSPARENT);
+	HFONT hTitleFont = CreateFont(18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+	TextOut(hdc, clockRect.left + 10, clockRect.top + 8, "时钟 - 专业版", 10);
+	
+	// 守慧吉祥物
+	DrawShouhuiMascot(hdc, clockRect.right - 50, clockRect.top - 5, 40);
+	
+	// 视图切换按钮
+	HFONT hViewFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	SelectObject(hdc, hViewFont);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	
+	const char* viewNames[] = {"模拟", "数字", "秒表"};
+	for (int i = 0; i < 3; i++) {
+		int btnX = clockRect.left + 100 + i * 70;
+		int btnY = clockRect.top + 35;
+		RECT viewRect = {btnX, btnY, btnX + 60, btnY + 25};
+		COLORREF bgColor = (clockView == i) ? RGB(255, 200, 100) : RGB(100, 100, 150);
+		HBRUSH hViewBrush = CreateSolidBrush(bgColor);
+		FillRect(hdc, &viewRect, hViewBrush);
+		DeleteObject(hViewBrush);
+		HPEN hViewPen = CreatePen(PS_SOLID, 1, RGB(80, 80, 120));
+		HPEN hOldPen2 = (HPEN)SelectObject(hdc, hViewPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, btnX, btnY, btnX + 60, btnY + 25);
+		SelectObject(hdc, hOldPen2);
+		DeleteObject(hViewPen);
+		int textWidth = GetTextWidth(hdc, viewNames[i]);
+		TextOut(hdc, btnX + (60 - textWidth)/2, btnY + 5, viewNames[i], strlen(viewNames[i]));
+	}
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTitleFont);
+	DeleteObject(hViewFont);
+	
+	// 根据视图绘制内容
+	switch (clockView) {
+	case 0:
+		DrawAnalogClock(hdc, centerX, centerY + 10);
+		break;
+	case 1:
+		DrawDigitalClock(hdc, centerX, centerY + 10);
+		break;
+	case 2:
+		DrawStopwatch(hdc, centerX, centerY + 10);
+		break;
+	}
+	
+	// 关闭提示
+	HFONT hHintFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	hOldFont = (HFONT)SelectObject(hdc, hHintFont);
+	SetTextColor(hdc, RGB(150, 150, 150));
+	TextOut(hdc, clockRect.left + 10, clockRect.bottom - 25, "按ESC键关闭", 10);
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hHintFont);
+}
+
+// ============================================================
+//  时钟输入处理
+// ============================================================
+void HandleClockInput(char key) {
+	if (key == 27) { // ESC - 关闭时钟
+		showClock = FALSE;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+		return;
+	}
+}
+
+// ============================================================
+//  时钟鼠标点击处理
+// ============================================================
+void HandleClockMouseClick(int x, int y, int centerX, int centerY) {
+	RECT clockRect = {centerX - 250, centerY - 200, centerX + 250, centerY + 200};
+	int relX = x - clockRect.left;
+	int relY = y - clockRect.top;
+	
+	// 视图切换按钮
+	for (int i = 0; i < 3; i++) {
+		int btnX = clockRect.left + 100 + i * 70;
+		int btnY = clockRect.top + 35;
+		if (x >= btnX && x <= btnX + 60 && y >= btnY && y <= btnY + 25) {
+			clockView = i;
+			DebugLog("HandleClockMouseClick: 切换到视图 %d", i);
+			InvalidateRect(GetActiveWindow(), NULL, TRUE);
+			return;
+		}
+	}
+	
+	// 秒表按钮
+	if (clockView == 2) {
+		int btnWidth = 80;
+		int btnHeight = 35;
+		int btnY = centerY + 80;
+		int spacing = 100;
+		
+		// 开始/停止按钮
+		RECT startRect = {centerX - spacing, btnY, centerX - spacing + btnWidth, btnY + btnHeight};
+		if (x >= startRect.left && x <= startRect.right && y >= startRect.top && y <= startRect.bottom) {
+			if (stopwatchRunning) {
+				stopwatchElapsed += GetTickCount() - stopwatchStartTime;
+				stopwatchRunning = FALSE;
+				DebugLog("HandleClockMouseClick: 秒表停止");
+			} else {
+				stopwatchStartTime = GetTickCount();
+				stopwatchRunning = TRUE;
+				DebugLog("HandleClockMouseClick: 秒表开始");
+			}
+			InvalidateRect(GetActiveWindow(), NULL, TRUE);
+			return;
+		}
+		
+		// 重置按钮
+		RECT resetRect = {centerX + spacing - btnWidth, btnY, centerX + spacing, btnY + btnHeight};
+		if (x >= resetRect.left && x <= resetRect.right && y >= resetRect.top && y <= resetRect.bottom) {
+			stopwatchRunning = FALSE;
+			stopwatchElapsed = 0;
+			DebugLog("HandleClockMouseClick: 秒表重置");
+			InvalidateRect(GetActiveWindow(), NULL, TRUE);
+			return;
+		}
+	}
+}
 
 // 获取应用程序窗口区域
 AppRect GetAppRect(HWND hwnd, int appType) {
@@ -1696,6 +2225,7 @@ void CreateEthernetBackground(HWND hwnd) {\
     isEthernetBackgroundLoaded = TRUE;\
 }\
 //废弃代码完 
+
 
 // ============================================================
 //  绘制阳间版安装引导界面
@@ -9756,18 +10286,18 @@ void CloseAllApps(HWND hwnd) {
 	showCalendar = FALSE;
 	showClock = FALSE;
 	showEventDialog = FALSE;
-    showCalculator = FALSE;
-    showSystemInfo = FALSE;
-    showFileManager = FALSE;
-    showFileEditor = FALSE;
-    showSettings = FALSE;
-    showSpecialMessage = FALSE;
-    showFinalEgg = FALSE;
-    showBugReporter = FALSE;
-    specialMessageScrollY = 0;
-    if (hwnd) {
-        InvalidateRect(hwnd, NULL, TRUE);
-    }
+	showCalculator = FALSE;
+	showSystemInfo = FALSE;
+	showFileManager = FALSE;
+	showFileEditor = FALSE;
+	showSettings = FALSE;
+	showSpecialMessage = FALSE;
+	showFinalEgg = FALSE;
+	showBugReporter = FALSE;
+	specialMessageScrollY = 0;
+	if (hwnd) {
+		InvalidateRect(hwnd, NULL, TRUE);
+	}
 }
 
 // 启动OOBE
@@ -10737,1903 +11267,2612 @@ void HandleCalendarInput(char key) {
     }
 }
 
+// ============================================================
+//  状态栏和开始菜单 - 函数实现
+// ============================================================
+
+// ============================================================
+//  绘制状态栏背景
+// ============================================================
+void DrawStatusBarBackground(HDC hdc, RECT rect) {
+	HBRUSH hBgBrush = CreateSolidBrush(STATUSBAR_BG_COLOR);
+	FillRect(hdc, &rect, hBgBrush);
+	DeleteObject(hBgBrush);
+	
+	HPEN hBorderPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	MoveToEx(hdc, rect.left, rect.bottom - 1, NULL);
+	LineTo(hdc, rect.right, rect.bottom - 1);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+}
+
+void DrawStartButton(HDC hdc, int x, int y) {
+	DebugLog("DrawStartButton: x=%d, y=%d", x, y);
+	int btnWidth = 80;
+	int btnHeight = STATUSBAR_HEIGHT - 8;
+	int btnX = x;
+	int btnY = y + 4;
+	
+	COLORREF bgColor = isStartButtonPressed ? RGB(60, 60, 80) : 
+	(isStartButtonHovered ? RGB(50, 50, 70) : RGB(40, 40, 60));
+	HBRUSH hBtnBrush = CreateSolidBrush(bgColor);
+	RECT btnRect = {btnX, btnY, btnX + btnWidth, btnY + btnHeight};
+	FillRect(hdc, &btnRect, hBtnBrush);
+	DeleteObject(hBtnBrush);
+	
+	HPEN hBorderPen = CreatePen(PS_SOLID, 1, 
+								isStartButtonHovered ? RGB(100, 100, 140) : RGB(60, 60, 80));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, btnX, btnY, btnX + btnWidth, btnY + btnHeight);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	
+	// 只显示"开始"文字，不显示Win图标
+	HFONT hTextFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 GB2312_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTextFont);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	TextOut(hdc, btnX + 25, btnY + (btnHeight - 16) / 2 + 1, "开始", 4);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTextFont);
+	DebugLog("DrawStartButton: 完成");
+}
+
+// ============================================================
+//  绘制网络图标
+// ============================================================
+void DrawNetworkIcon(HDC hdc, int x, int y) {
+	int size = STATUSBAR_ICON_SIZE;
+	COLORREF color = isNetworkHovered ? RGB(180, 210, 255) : RGB(255, 255, 255);
+	
+	HPEN hOldPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
+	
+	for (int i = 0; i < 4; i++) {
+		int barHeight = 4 + i * 3;
+		int barWidth = 3;
+		int barX = x + i * 5 + 2;
+		int barY = y + size - barHeight;
+		
+		COLORREF barColor = isNetworkConnected ? color : RGB(150, 150, 150);
+		HBRUSH hBrush = CreateSolidBrush(barColor);
+		RECT r = {barX, barY, barX + barWidth, barY + barHeight};
+		FillRect(hdc, &r, hBrush);
+		DeleteObject(hBrush);
+	}
+	
+	SelectObject(hdc, hOldPen);
+}
+
+// ============================================================
+//  绘制音量图标
+// ============================================================
+void DrawVolumeIcon(HDC hdc, int x, int y) {
+	int size = STATUSBAR_ICON_SIZE;
+	COLORREF color = isVolumeHovered ? RGB(180, 210, 255) : RGB(255, 255, 255);
+	
+	HPEN hPen = CreatePen(PS_SOLID, 2, color);
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+	HBRUSH hBrush = CreateSolidBrush(color);
+	HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, hBrush);
+	
+	POINT triPoints[3] = {
+		{x + 4, y + size/2 - 6},
+		{x + 4, y + size/2 + 6},
+		{x + 10, y + size/2}
+	};
+	Polygon(hdc, triPoints, 3);
+	
+	Rectangle(hdc, x + 10, y + size/2 - 4, x + 16, y + size/2 + 4);
+	
+	if (volumeLevel > 20) {
+		for (int i = 0; i < 3; i++) {
+			int waveLen = 4 + i * 3;
+			int waveX = x + 20 + i * 3;
+			if (volumeLevel > 40 + i * 20) {
+				MoveToEx(hdc, waveX, y + size/2 - waveLen/2, NULL);
+				LineTo(hdc, waveX, y + size/2 + waveLen/2);
+				MoveToEx(hdc, waveX + 1, y + size/2 - waveLen/2, NULL);
+				LineTo(hdc, waveX + 1, y + size/2 + waveLen/2);
+			}
+		}
+	}
+	
+	SelectObject(hdc, hOldBrush);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBrush);
+	DeleteObject(hPen);
+}
+
+// ============================================================
+//  绘制显示图标
+// ============================================================
+void DrawDisplayIcon(HDC hdc, int x, int y) {
+	int size = STATUSBAR_ICON_SIZE;
+	COLORREF color = isDisplayHovered ? RGB(180, 210, 255) : RGB(255, 255, 255);
+	
+	HPEN hPen = CreatePen(PS_SOLID, 1, color);
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+	HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	
+	Rectangle(hdc, x, y + 2, x + size - 2, y + size - 6);
+	
+	MoveToEx(hdc, x + size/2 - 4, y + size - 6, NULL);
+	LineTo(hdc, x + size/2 + 4, y + size - 6);
+	LineTo(hdc, x + size/2 + 6, y + size - 2);
+	LineTo(hdc, x + size/2 - 6, y + size - 2);
+	
+	SelectObject(hdc, hOldPen);
+	SelectObject(hdc, hOldBrush);
+	DeleteObject(hPen);
+}
+
+// ============================================================
+//  绘制设置图标
+// ============================================================
+void DrawSettingsIcon(HDC hdc, int x, int y) {
+	int size = STATUSBAR_ICON_SIZE;
+	COLORREF color = isSettingsHovered ? RGB(180, 210, 255) : RGB(255, 255, 255);
+	int cx = x + size/2;
+	int cy = y + size/2;
+	int radius = size/2 - 4;
+	
+	HPEN hPen = CreatePen(PS_SOLID, 1, color);
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+	HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	
+	for (int i = 0; i < 8; i++) {
+		double angle = i * 3.14159 / 4;
+		int rx = cx + (int)(radius * cos(angle));
+		int ry = cy + (int)(radius * sin(angle));
+		Rectangle(hdc, rx - 2, ry - 2, rx + 2, ry + 2);
+	}
+	
+	Ellipse(hdc, cx - radius/2, cy - radius/2, cx + radius/2, cy + radius/2);
+	
+	SelectObject(hdc, hOldPen);
+	SelectObject(hdc, hOldBrush);
+	DeleteObject(hPen);
+}
+
+// ============================================================
+//  绘制通知图标
+// ============================================================
+void DrawNotificationIcon(HDC hdc, int x, int y) {
+	int size = STATUSBAR_ICON_SIZE;
+	COLORREF color = isNotificationHovered ? RGB(180, 210, 255) : RGB(255, 255, 255);
+	
+	HPEN hPen = CreatePen(PS_SOLID, 1, color);
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+	HBRUSH hBrush = CreateSolidBrush(color);
+	HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, hBrush);
+	
+	POINT bellPoints[4] = {
+		{x + size/2, y + 2},
+		{x + 2, y + size - 6},
+		{x + size - 2, y + size - 6},
+		{x + size/2, y + 2}
+	};
+	Polygon(hdc, bellPoints, 4);
+	
+	Ellipse(hdc, x + size/2 - 3, y, x + size/2 + 3, y + 4);
+	
+	if (notificationCount > 0) {
+		HBRUSH hRedBrush = CreateSolidBrush(RGB(255, 50, 50));
+		SelectObject(hdc, hRedBrush);
+		Ellipse(hdc, x + size - 4, y + size - 6, x + size + 2, y + size);
+		SelectObject(hdc, hOldBrush);
+		DeleteObject(hRedBrush);
+		
+		HFONT hFont = CreateFont(8, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		char countStr[5];
+		sprintf(countStr, "%d", notificationCount > 9 ? 9 : notificationCount);
+		TextOut(hdc, x + size - 3, y + size - 5, countStr, strlen(countStr));
+		SelectObject(hdc, hOldFont);
+		DeleteObject(hFont);
+	}
+	
+	SelectObject(hdc, hOldBrush);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBrush);
+	DeleteObject(hPen);
+}
+
+// ============================================================
+//  绘制日期时间
+// ============================================================
+void DrawDateTime(HDC hdc, int x, int y) {
+	char dateStr[50], timeStr[50];
+	GetCurrentDateTime(dateStr, timeStr);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	
+	HFONT hTimeFont = CreateFont(16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTimeFont);
+	
+	SetTextColor(hdc, isTimeHovered ? RGB(180, 210, 255) : RGB(255, 255, 255));
+	char displayTime[20];
+	strncpy(displayTime, timeStr, 8);
+	displayTime[8] = '\0';
+	TextOut(hdc, x, y + 2, displayTime, strlen(displayTime));
+	
+	HFONT hDateFont = CreateFont(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	SelectObject(hdc, hDateFont);
+	SetTextColor(hdc, RGB(180, 180, 200));
+	TextOut(hdc, x + 52, y + 6, dateStr, strlen(dateStr));
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTimeFont);
+	DeleteObject(hDateFont);
+}
+
+// ============================================================
+//  绘制状态栏图标（整合）
+// ============================================================
+void DrawStatusBarIcons(HDC hdc, int startX, int y) {
+	int iconSize = STATUSBAR_ICON_SIZE;
+	int spacing = STATUSBAR_ICON_SPACING;
+	int currentX = startX;
+	int iconY = y + (STATUSBAR_HEIGHT - iconSize) / 2;
+	
+	DrawNetworkIcon(hdc, currentX, iconY);
+	currentX += iconSize + spacing;
+	
+	DrawVolumeIcon(hdc, currentX, iconY);
+	currentX += iconSize + spacing;
+	
+	DrawDisplayIcon(hdc, currentX, iconY);
+	currentX += iconSize + spacing;
+	
+	DrawSettingsIcon(hdc, currentX, iconY);
+	currentX += iconSize + spacing;
+	
+	DrawNotificationIcon(hdc, currentX, iconY);
+}
+
+// ============================================================
+//  绘制开始菜单项（宽字符版本）
+// ============================================================
+void DrawStartMenuItem(HDC hdc, int x, int y, int width, int height, 
+					   const StartMenuItem* item, BOOL hovered) {
+	
+	if (hovered) {
+		HBRUSH hHoverBrush = CreateSolidBrush(MENU_HOVER_COLOR);
+		RECT hoverRect = {x, y, x + width, y + height};
+		FillRect(hdc, &hoverRect, hHoverBrush);
+		DeleteObject(hHoverBrush);
+	}
+	
+	SetBkMode(hdc, TRANSPARENT);
+	
+	// 图标
+	if (item->icon && wcslen(item->icon) > 0) {
+		HFONT hIconFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+									 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									 DEFAULT_QUALITY, DEFAULT_PITCH, "Segoe UI Emoji");
+		HFONT hOldFont = (HFONT)SelectObject(hdc, hIconFont);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		TextOutW(hdc, x + 8, y + 7, item->icon, wcslen(item->icon));
+		SelectObject(hdc, hOldFont);
+		DeleteObject(hIconFont);
+	}
+	
+	// 名称
+	if (item->name && wcslen(item->name) > 0) {
+		HFONT hNameFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+									 GB2312_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									 DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+		HFONT hOldFont = (HFONT)SelectObject(hdc, hNameFont);
+		COLORREF textColor = hovered ? MENU_TEXT_HOVER_COLOR : MENU_TEXT_COLOR;
+		SetTextColor(hdc, textColor);
+		TextOutW(hdc, x + 36, y + 9, item->name, wcslen(item->name));
+		SelectObject(hdc, hOldFont);
+		DeleteObject(hNameFont);
+	}
+}
+
+// ============================================================
+//  绘制开始菜单
+// ============================================================
+void DrawStartMenu(HDC hdc, int startX, int startY) {
+	int menuWidth = STARTMENU_WIDTH;
+	int itemHeight = STARTMENU_ITEM_HEIGHT;
+	int totalItems = STARTMENU_ITEM_COUNT;
+	int menuHeight = totalItems * itemHeight + STARTMENU_PADDING * 2;
+	
+	if (menuHeight > STARTMENU_MAX_HEIGHT) {
+		menuHeight = STARTMENU_MAX_HEIGHT;
+	}
+	
+	int menuX = startX;
+	int menuY = startY + STATUSBAR_HEIGHT;
+	
+	HBRUSH hMenuBrush = CreateSolidBrush(MENU_BG_COLOR);
+	RECT menuRect = {menuX, menuY, menuX + menuWidth, menuY + menuHeight};
+	FillRect(hdc, &menuRect, hMenuBrush);
+	DeleteObject(hMenuBrush);
+	
+	HPEN hBorderPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	RoundRect(hdc, menuX, menuY, menuX + menuWidth, menuY + menuHeight,
+			  STARTMENU_CORNER_RADIUS, STARTMENU_CORNER_RADIUS);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	int itemX = menuX + STARTMENU_PADDING;
+	int itemY = menuY + STARTMENU_PADDING;
+	int itemWidth = menuWidth - STARTMENU_PADDING * 2;
+	
+	for (int i = 0; i < totalItems; i++) {
+		const StartMenuItem* item = &startMenuItems[i];
+		
+		if (item->isSeparator) {
+			int sepY = itemY + itemHeight / 2;
+			HPEN hSepPen = CreatePen(PS_SOLID, 1, MENU_SEPARATOR_COLOR);
+			SelectObject(hdc, hSepPen);
+			MoveToEx(hdc, itemX + 10, sepY, NULL);
+			LineTo(hdc, itemX + itemWidth - 10, sepY);
+			DeleteObject(hSepPen);
+			itemY += itemHeight;
+			continue;
+		}
+		
+		BOOL isHovered = (i == startMenuHoverIndex);
+		DrawStartMenuItem(hdc, itemX, itemY, itemWidth, itemHeight, item, isHovered);
+		itemY += itemHeight;
+	}
+}
+
+// ============================================================
+//  绘制完整状态栏
+// ============================================================
+void DrawStatusBar(HDC hdc, RECT rect) {
+	DebugLog("DrawStatusBar: 开始绘制状态栏");
+	RECT statusBarRect = {rect.left, rect.top, rect.right, rect.top + STATUSBAR_HEIGHT};
+	
+	DrawStatusBarBackground(hdc, statusBarRect);
+	
+	int currentX = rect.left + 4;
+	int y = rect.top;
+	
+	// 开始按钮（包含所有软件入口）
+	DrawStartButton(hdc, currentX, y);
+	currentX += 84;
+	
+	// 状态栏图标（网络、音量、显示、设置、通知）
+	DrawStatusBarIcons(hdc, currentX + 10, y);
+	
+	// 计算版权信息位置（在状态栏中间偏右，填满剩余空间）
+	HFONT hCopyrightFont = CreateFont(16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+									  GB2312_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hCopyrightFont);
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(180, 180, 200));
+	
+	const char* copyrightText = "(C) 果冻鱼工作室 Jellyfish Studio";
+	int copyrightWidth = GetTextWidth(hdc, copyrightText);
+	
+	// 时间区域宽度
+	int timeWidth = 130;
+	int timeX = rect.right - timeWidth - 10;
+	
+	// 计算版权信息位置（在图标和时间之间居中）
+	int iconEndX = currentX + 10 + (STATUSBAR_ICON_SIZE + STATUSBAR_ICON_SPACING) * 5;
+	int availableWidth = timeX - iconEndX - 20;
+	int copyrightX = iconEndX + (availableWidth - copyrightWidth) / 2;
+	if (copyrightX < iconEndX + 10) copyrightX = iconEndX + 10;
+	
+	TextOut(hdc, copyrightX, y + 12, copyrightText, strlen(copyrightText));
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hCopyrightFont);
+	
+	// 日期时间（最右侧）
+	int timeY = y;
+	DrawDateTime(hdc, rect.right - timeWidth - 10, timeY);
+	
+	// 开始菜单（显示在开始按钮下方）
+	if (showStartMenu) {
+		DrawStartMenu(hdc, rect.left, rect.top);
+	}
+	DebugLog("DrawStatusBar: 完成");
+}
+
+// ============================================================
+//  处理开始菜单鼠标移动
+// ============================================================
+void HandleStartMenuMouseMove(int x, int y) {
+	if (!showStartMenu) return;
+	
+	int menuX = 0;
+	int menuY = STATUSBAR_HEIGHT + STARTMENU_PADDING;
+	int itemWidth = STARTMENU_WIDTH - STARTMENU_PADDING * 2;
+	int itemHeight = STARTMENU_ITEM_HEIGHT;
+	
+	int relX = x - menuX - STARTMENU_PADDING;
+	int relY = y - menuY;
+	
+	int newHoverIndex = -1;
+	if (relX >= 0 && relX <= itemWidth && relY >= 0) {
+		int index = relY / itemHeight;
+		if (index < STARTMENU_ITEM_COUNT) {
+			const StartMenuItem* item = &startMenuItems[index];
+			if (!item->isSeparator) {
+				newHoverIndex = index;
+			}
+		}
+	}
+	
+	if (newHoverIndex != startMenuHoverIndex) {
+		startMenuHoverIndex = newHoverIndex;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+	}
+}
+
+// ============================================================
+//  处理状态栏点击
+// ============================================================
+void HandleStatusBarClick(int x, int y) {
+	DebugLog("HandleStatusBarClick: x=%d, y=%d", x, y);
+	if (x >= 4 && x <= 84 && y >= 4 && y <= 4 + STATUSBAR_HEIGHT - 8) {
+		DebugLog("HandleStatusBarClick: 点击开始按钮");
+		ToggleStartMenu();
+		return;
+	}
+	
+	RECT clientRect;
+	GetClientRect(GetActiveWindow(), &clientRect);
+	int timeX = clientRect.right - 130;
+	if (x >= timeX && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("HandleStatusBarClick: 点击时间区域，打开日历");
+		ShowCalendar(GetActiveWindow());
+		return;
+	}
+	
+	int iconStartX = 94;
+	int iconSize = STATUSBAR_ICON_SIZE;
+	int spacing = STATUSBAR_ICON_SPACING;
+	
+	int notifyX = iconStartX + (iconSize + spacing) * 4;
+	if (x >= notifyX && x <= notifyX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("HandleStatusBarClick: 点击通知图标");
+		showNotifications = !showNotifications;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+		return;
+	}
+	
+	if (showStartMenu) {
+		int menuWidth = STARTMENU_WIDTH;
+		int menuHeight = STARTMENU_MAX_HEIGHT;
+		if (!(x >= 0 && x <= menuWidth && y >= STATUSBAR_HEIGHT && y <= STATUSBAR_HEIGHT + menuHeight)) {
+			DebugLog("HandleStatusBarClick: 点击菜单外部，关闭菜单");
+			CloseStartMenu();
+		}
+	}
+}
+
+// ============================================================
+//  处理开始菜单点击
+// ============================================================
+void HandleStartMenuClick(int x, int y) {
+	if (!showStartMenu) return;
+	
+	int menuX = 0;
+	int menuY = STATUSBAR_HEIGHT + STARTMENU_PADDING;
+	int itemWidth = STARTMENU_WIDTH - STARTMENU_PADDING * 2;
+	int itemHeight = STARTMENU_ITEM_HEIGHT;
+	
+	int relX = x - menuX - STARTMENU_PADDING;
+	int relY = y - menuY;
+	
+	if (relX < 0 || relX > itemWidth || relY < 0) return;
+	
+	int itemIndex = relY / itemHeight;
+	if (itemIndex >= STARTMENU_ITEM_COUNT) return;
+	
+	const StartMenuItem* item = &startMenuItems[itemIndex];
+	if (item->isSeparator) return;
+	
+	ExecuteStartMenuItem(item->command);
+	CloseStartMenu();
+}
+
+// ============================================================
+//  切换开始菜单
+// ============================================================
+void ToggleStartMenu() {
+	showStartMenu = !showStartMenu;
+	if (showStartMenu) {
+		startMenuHoverIndex = -1;
+	}
+	InvalidateRect(GetActiveWindow(), NULL, TRUE);
+}
+
+// ============================================================
+//  关闭开始菜单
+// ============================================================
+void CloseStartMenu() {
+	showStartMenu = FALSE;
+	startMenuHoverIndex = -1;
+	InvalidateRect(GetActiveWindow(), NULL, TRUE);
+}
+
+// ============================================================
+//  执行开始菜单命令
+// ============================================================
+void ExecuteStartMenuItem(const char* command) {
+	DebugLog("ExecuteStartMenuItem: 执行 %s", command);
+	HWND hwnd = GetActiveWindow();
+	
+	if (strcmp(command, "desktop") == 0) {
+		DebugLog("ExecuteStartMenuItem: 显示桌面");
+		CloseAllApps(hwnd);
+		ShowDesktop(hwnd);
+	}
+	else if (strcmp(command, "calculator") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开计算器");
+		ShowCalculator(hwnd);
+	}
+	else if (strcmp(command, "filemanager") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开文件管理器");
+		ShowFileManager(hwnd);
+	}
+	else if (strcmp(command, "sysinfo") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开系统信息");
+		ShowSystemInfo(hwnd);
+	}
+	else if (strcmp(command, "settings") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开系统设置");
+		ShowSettings(hwnd);
+	}
+	else if (strcmp(command, "bugreport") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开Bug报告");
+		ShowBugReporter(hwnd);
+	}
+	else if (strcmp(command, "calendar") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开日历");
+		ShowCalendar(hwnd);
+	}
+	else if (strcmp(command, "clock") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开时钟");
+		ShowClock(hwnd);
+	}
+	else if (strcmp(command, "shutdown") == 0) {
+		DebugLog("ExecuteStartMenuItem: 关机");
+		ShutdownSystem(hwnd);
+	}
+	else {
+		DebugLog("ExecuteStartMenuItem: 未知命令 %s", command);
+	}
+}
+
+// ============================================================
+//  添加通知
+// ============================================================
+void AddNotification(const char* message) {
+	if (notificationCount < 10) {
+		strncpy(notifications[notificationCount], message, 199);
+		notifications[notificationCount][199] = '\0';
+		notificationCount++;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+	}
+}
+
+//FindFirstChangeNotificationA(tmpfile(),QueryPerformanceFrequency(),tmpnam(),SaveFileContent(q.eixne(PAN_CONTRAST_MEDIUM_HIGH,SUBLANG_LITHUANIAN_LITHUANIA)));
+//"我要监视文件变化，但是呢——
+//我用一个临时文件当文件夹路径，
+//我用一个计时器频率当'是否监视子目录'，
+//我用一个临时文件名当'监视什么变化'，
+//然后我还想顺便保存文件，
+//但是保存文件的时候，
+//我调用了一个根本不存在的函数 q.eixne，
+//给它传了两个八竿子打不着的参数——
+//对比度主题 和 立陶宛语。"
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) {
-    switch(Message) {
-        case WM_CREATE: {
-            DebugLog("========== WM_CREATE 开始 ==========");
-            DebugLog("系统启动时间: %d ms", GetTickCount());
-            
-            try {
-                DebugLog("加载配置...");
-                LoadConfig();
-                
-                DebugLog("初始化系统信息...");
-                InitializeSystemInfo();
-                
-                DebugLog("设置定时器...");
-                SetTimer(hwnd, 7, 1000, NULL);
-                
-                DebugLog("初始化IME...");
-                hIMC = ImmGetContext(hwnd);
-                if (hIMC) {
-                    DWORD convMode, sentMode;
-                    ImmGetConversionStatus(hIMC, &convMode, &sentMode);
-                    convMode |= IME_CMODE_NATIVE;
-                    ImmSetConversionStatus(hIMC, convMode, sentMode);
-                    ImmReleaseContext(hwnd, hIMC);
-                    DebugLog("IME初始化成功");
-                } else {
-                    DebugLog("警告: IME初始化失败");
-                }
-                
-                DebugLog("加载日历事件...");
-                LoadCalendarEvents();
-                
-                // ---- 强制关闭所有界面 ----
-                showFOSBeta = FALSE;
-                showBootAnimation = FALSE;
-                showWelcome = FALSE;
-                showSecondScreen = FALSE;
-                showOOBE = FALSE;
-                showDesktop = FALSE;
-                showLogin = FALSE;
-                showShutdown = FALSE;
-                showCDKeyScreen = FALSE;
-                showInstall = FALSE;
-                
-                if (isFirstBoot) {
-                    // ============================================================
-                    //  首次启动：CD-KEY验证 → 安装引导 → OOBE
-                    // ============================================================
-                    DebugLog("首次启动，显示CD-KEY验证界面");
-                    ShowCDKeyScreen(hwnd);
-                } else {
-                    // ============================================================
-                    //  已配置：显示阳间版启动动画（有水母的），然后进入登录界面
-                    // ============================================================
-                    DebugLog("系统已配置，启动阳间版启动动画（水母版）");
-                    
-                    // 初始化阳间版启动动画
-                    ZeroMemory(&g_sunlight, sizeof(SunlightState));
-                    g_sunlight.startTime = GetTickCount();
-                    g_sunlight.lastFrameTime = g_sunlight.startTime;
-                    g_sunlight.jellyX = 400;
-                    g_sunlight.jellyY = 350;
-                    g_sunlight.jellyAlpha = 0.0f;
-                    g_sunlight.jellyScale = 0.7f;
-                    g_sunlight.jellySpeed = 1.0f;
-                    
-                    // 设置特殊日期
-                    time_t now = time(NULL);
-                    tm* t = localtime(&now);
-                    int m = t->tm_mon + 1, d = t->tm_mday, hh = t->tm_hour, min = t->tm_min;
-                    
-                    if (m == 9 && d == 2) {
-                        g_sunlight.isBirthday = TRUE;
-                        g_sunlight.isGoldMode = TRUE;
-                        if (hh >= 14 && hh < 15) { g_sunlight.isBirthHour = TRUE; g_sunlight.isDoubleEgg = TRUE; }
-                        if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
-                    }
-                    if (m == 1 && d == 1) {
-                        g_sunlight.isSubmitDay = TRUE;
-                        g_sunlight.isGoldMode = TRUE;
-                        if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
-                    }
-                    if (m == 5 && d == 20) {
-                        g_sunlight.isLoveDay = TRUE;
-                    }
-                    if (hh == 3 && min == 47 && !g_sunlight.isBirthday && !g_sunlight.isSubmitDay) {
-                        g_sunlight.isSoulHour = TRUE;
-                    }
-                    
-                    if (g_sunlight.isLoveDay) {
-                        g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "developer.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-                        if (!g_sunlight.hPhoto) {
-                            g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "photo.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
-                        }
-                        g_sunlight.photoLoaded = (g_sunlight.hPhoto != NULL);
-                    }
-                    
-                    // 随机语录
-                    const char* quotes[] = {
-                        "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
-                        "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
-                        "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
-                        "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
-                        "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
-                    };
-                    int idx = rand() % 15;
-                    strcpy(g_sunlight.quote, quotes[idx]);
-                    g_sunlight.quoteChangeTime = g_sunlight.startTime;
-                    
-                    // 播放启动音乐
-                    PlaySound(TEXT("startup.wav"), NULL, SND_ASYNC | SND_NODEFAULT);
-                    g_sunlight.musicStarted = TRUE;
-                    
-                    showBootAnimation = TRUE;
-                    showFOSBeta = FALSE;
-                    
-                    // 设置动画刷新定时器 (保持原刷新率：40ms)
-                    SetTimer(hwnd, 99, 40, NULL);
-                    DebugLog("阳间版启动动画已初始化（水母版），刷新间隔40ms");
-                }
-                
-                DebugLog("WM_CREATE 处理完成");
-            }
-            catch (const std::exception& e) {
-                DebugLog("WM_CREATE异常: %s", e.what());
-                TriggerDebugPurpleScreen(hwnd, ERR_WINDOW_CREATE,
-                    "窗口创建初始化失败\n异常信息: %s", e.what());
-            }
-            catch (...) {
-                DebugLog("WM_CREATE未知异常");
-                TriggerDebugPurpleScreen(hwnd, ERR_WINDOW_CREATE,
-                    "窗口创建初始化发生未知异常");
-            }
-            
-            InvalidateRect(hwnd, NULL, TRUE);
-            break;
-        }
-        
-        case WM_SIZE: {
-            CreateBackgroundBitmap(hwnd);
-            break;
-        }
-        
-        case WM_TIMER: {
-            // ---- 安装引导更新定时器 (100ms) ----
-            if (wParam == 98) {
-                if (g_install.isInstalling && !g_install.isComplete) {
-                    UpdateInstallState();
-                    if (g_install.isComplete) {
-                        KillTimer(hwnd, 98);
-                        OnInstallComplete(hwnd);
-                    }
-                    InvalidateRect(hwnd, NULL, FALSE);
-                }
-                break;
-            }
-            
-            // ---- 阳间版启动动画刷新定时器 (40ms) ----
-            if (wParam == 99) {
-                if (!g_sunlight.isFinished) {
-                    InvalidateRect(hwnd, NULL, FALSE);
-                } else {
-                    KillTimer(hwnd, 99);
-                    DebugLog("阳间版启动动画完成，进入登录界面");
-                    showBootAnimation = FALSE;
-                    PlaySound(TEXT(""), NULL, SND_ASYNC | SND_NODEFAULT);
-                    ShowLoginScreen(hwnd);
-                }
-                break;
-            }
-            
-            // ---- 定时器7：桌面时钟更新 (1秒) ----
-            if (wParam == 7) {
-                if (showDesktop) {
-                    InvalidateRect(hwnd, NULL, FALSE);
-                }
-                break;
-            }
-            
-            // ---- 定时器3：进度条动画 ----
-            if (wParam == 3) {
-                progressValue = (progressValue + 2) % 100;
-                if (!showOOBE && !showComplete && !showDesktop && !showBootAnimation && 
-                    !showLogin && !showCDKeyScreen && !showGameEgg && !showFileEditor && 
-                    !showSettings && !showUSBError && !showBugReporter && !showBugList && 
-                    !showCalendar && !g_install.isInstalling) {
-                    InvalidateRect(hwnd, NULL, FALSE);
-                }
-            }
-            
-            // ---- 原有定时器1 ----
-            if (wParam == 1) {
-                DebugLog("定时器1: 欢迎界面结束");
-                KillTimer(hwnd, 1);
-                clean(hwnd);
-                showSecondScreen = TRUE;
-                InvalidateRect(hwnd, NULL, TRUE);
-                SetTimer(hwnd, 2, 10000, NULL);
-            }
-            
-            // ---- 原有定时器2 ----
-            if (wParam == 2) {
-                DebugLog("定时器2: 第二界面结束");
-                KillTimer(hwnd, 2);
-                cleanSecond(hwnd);
-            }
-            
-            // ---- 原有定时器4 ----
-            if (wParam == 4) {
-                progressValue += 2;
-                if (progressValue >= 100) {
-                    DebugLog("定时器4: 启动完成");
-                    KillTimer(hwnd, 4);
-                    progressValue = 100;
-                    if (isFirstBoot) {
-                        EndBootAnimation(hwnd);
-                        SetTimer(hwnd, 1, 5000, NULL);
-                        SetTimer(hwnd, 3, 100, NULL);
-                    } else {
-                        ShowLoginScreen(hwnd);
-                    }
-                }
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            
-            // ---- 原有定时器5 (OOBE完成关机) ----
-            if (wParam == 5) {
-                DebugLog("定时器5: OOBE完成，准备关机");
-                KillTimer(hwnd, 5);
-                ShowShutdownAnimation(hwnd);
-            }
-            
-            // ---- 原有定时器6 ----
-            if (wParam == 6) {
-                shutdownProgress += 2;
-                if (shutdownProgress >= 100) {
-                    DebugLog("定时器6: 关机完成");
-                    KillTimer(hwnd, 6);
-                    shutdownProgress = 100;
-                    if (!ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCE, 0)) {
-                        MessageBox(hwnd, "请按按键退出", "提示", MB_OK | MB_ICONINFORMATION);
-                        PostQuitMessage(0);
-                    }
-                }
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            
-            // ---- 原有定时器8 ----
-            if (wParam == 8) {
-                fosProgressValue += 2;
-                if (fosProgressValue >= 100) {
-                    DebugLog("定时器8: FOS启动完成");
-                    KillTimer(hwnd, 8);
-                    fosProgressValue = 100;
-                    EndFOSBetaAnimation(hwnd);
-                    SetTimer(hwnd, 4, 40, NULL);
-                }
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            
-            // ---- 原有定时器9 (水母游戏) ----
-            if (wParam == 9) {
-                UpdateJellyfishGame(hwnd);
-            }
-            
-            // ---- 紫屏定时器 ----
-            if (wParam == 12 && showPurpleScreen) {
-                purpleScreenProgress += 1;
-                if (purpleScreenProgress >= 100) {
-                    purpleScreenProgress = 100;
-                }
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            break;
-        }
-        
-        // IME输入法消息处理
-        case WM_IME_STARTCOMPOSITION:
-            isIMEComposing = TRUE;
-            break;
-            
-        case WM_IME_ENDCOMPOSITION:
-            isIMEComposing = FALSE;
-            break;
-            
-        case WM_IME_COMPOSITION:
-            if (lParam & GCS_RESULTSTR) {
-                HIMC hIMCTemp = ImmGetContext(hwnd);
-                if (hIMCTemp) {
-                    LONG dwSize = ImmGetCompositionString(hIMCTemp, GCS_RESULTSTR, NULL, 0);
-                    if (dwSize > 0) {
-                        char* lpStr = new char[dwSize + 1];
-                        ImmGetCompositionString(hIMCTemp, GCS_RESULTSTR, lpStr, dwSize);
-                        lpStr[dwSize] = '\0';
-                        
-                        if (showFileManager) {
-                            if (strlen(commandInput) + dwSize < 99) {
-                                strcat(commandInput, lpStr);
-                            } else {
-                                TriggerDebugPurpleScreen(hwnd, ERR_STRING_OVERFLOW,
-                                    "命令输入缓冲区溢出\n当前长度: %d\n尝试添加: %d 字节",
-                                    strlen(commandInput), dwSize);
-                            }
-                        }
-                        else if (showFileEditor && isEditing) {
-                            int fileLen = strlen(fileContent);
-                            if (fileLen + dwSize < 9999) {
-                                for (int i = fileLen; i >= cursorPosition; i--) {
-                                    fileContent[i + dwSize] = fileContent[i];
-                                }
-                                strncpy(&fileContent[cursorPosition], lpStr, dwSize);
-                                cursorPosition += dwSize;
-                            } else {
-                                TriggerDebugPurpleScreen(hwnd, ERR_BUFFER_OVERFLOW,
-                                    "文件内容缓冲区溢出\n当前大小: %d\n最大限制: 9999 字节",
-                                    fileLen + dwSize);
-                            }
-                        }
-                        else if (showCalculator && showSpecialMessage) {
-                            if (strlen(guessInput) + dwSize < 49) {
-                                strcat(guessInput, lpStr);
-                            }
-                        }
-                        else if (showOOBE) {
-                            if (currentStep == 1) {
-                                if (strlen(username) + dwSize < 49) {
-                                    strcat(username, lpStr);
-                                }
-                            }
-                            else if (currentStep == 2) {
-                                if (strlen(password) + dwSize < 49) {
-                                    strcat(password, lpStr);
-                                }
-                            }
-                            else if (currentStep == 3) {
-                                if (strlen(computerName) + dwSize < 49) {
-                                    strcat(computerName, lpStr);
-                                }
-                            }
-                        }
-                        else if (showLogin) {
-                            if (currentStep == 0) {
-                                if (strlen(loginUsername) + dwSize < 49) {
-                                    strcat(loginUsername, lpStr);
-                                }
-                            }
-                            else if (currentStep == 1) {
-                                if (strlen(loginPassword) + dwSize < 49) {
-                                    strcat(loginPassword, lpStr);
-                                }
-                            }
-                        }
-                        else if (showSettings) {
-                            if (settingsCurrentStep == 0) {
-                                if (settingsFocusField == 0) {
-                                    if (strlen(newUsername) + dwSize < 49) {
-                                        strcat(newUsername, lpStr);
-                                    }
-                                }
-                                else if (settingsFocusField == 1) {
-                                    if (strlen(newPassword) + dwSize < 49) {
-                                        strcat(newPassword, lpStr);
-                                    }
-                                }
-                                else if (settingsFocusField == 2) {
-                                    if (strlen(newConfirmPassword) + dwSize < 49) {
-                                        strcat(newConfirmPassword, lpStr);
-                                    }
-                                }
-                            }
-                            else if (settingsCurrentStep == 1) {
-                                if (strlen(newComputerName) + dwSize < 49) {
-                                    strcat(newComputerName, lpStr);
-                                }
-                            }
-                        }
-                        else if (showCalendar && showEventDialog) {
-                            if (strlen(eventText) + dwSize < 199) {
-                                strcat(eventText, lpStr);
-                            }
-                        }
-                        
-                        delete[] lpStr;
-                    }
-                    ImmReleaseContext(hwnd, hIMCTemp);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                }
-            }
-            break;
-        
-        case WM_CHAR: {
-            // ---- 安装界面键盘处理 ----
-            if (g_install.isInstalling && !g_install.isComplete) {
-                char key = (char)wParam;
-                HandleInstallInput(key, hwnd);
-                InvalidateRect(hwnd, NULL, FALSE);
-                return 0;
-            }
-            
-            if (showGameEgg) {
-                HandleJellyfishGameInput(wParam, hwnd);
-                InvalidateRect(hwnd, NULL, TRUE);
-                return 0;
-            }
-            
-            if (showFOSEgg) {
-                if (fosEggState == 5) {
-                    if (wParam == 27) {
-                        DebugLog("退出水母求饶彩蛋");
-                        showFOSEgg = FALSE;
-                        showFileManager = TRUE;
-                        fosInputCount = 0;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                    }
-                }
-                return 0;
-            }
-            
-            if (showPurpleScreen) {
-                HandlePurpleScreenInput((char)wParam, hwnd);
-                InvalidateRect(hwnd, NULL, TRUE);
-                return 0;
-            }
-            
-            if (showCDKeyScreen) {
-                HandleCDKeyInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showOOBE) {
-                HandleOOBEInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showLogin) {
-                HandleLoginInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showCalculator) {
-                HandleCalculatorInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showFileManager) {
-                HandleFileManagerInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showFileEditor) {
-                HandleFileEditorInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showSettings) {
-                HandleSettingsInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showBugReporter) {
-                HandleBugReporterInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showBugList) {
-                HandleBugListInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            else if (showCalendar) {
-                HandleCalendarInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-            }
-            break;
-        }
-        
-        case WM_KEYDOWN: {
-            // ---- 安装界面键盘处理（特殊键） ----
-            if (g_install.isInstalling && !g_install.isComplete) {
-                char key = (char)wParam;
-                if (key == VK_SPACE || key == VK_RETURN || key == VK_ESCAPE) {
-                    HandleInstallInput(key, hwnd);
-                    InvalidateRect(hwnd, NULL, FALSE);
-                    return 0;
-                }
-                return 0;
-            }
-            
-            CheckGameActivation(wParam, hwnd);
-            
-            // ---- 阳间版启动动画键盘处理 ----
-            if (g_useSunlightLauncher && !g_sunlight.isFinished) {
-                char key = (char)wParam;
-                BOOL ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-                
-                if (g_sunlight.showLovePhoto) {
-                    if (key == VK_ESCAPE) {
-                        g_sunlight.showLovePhoto = FALSE;
-                        g_sunlight.showLoveQuestion = TRUE;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                        return 0;
-                    }
-                    return 0;
-                }
-                
-                if (g_sunlight.showLoveQuestion) {
-                    if (key == VK_ESCAPE) {
-                        g_sunlight.showLoveQuestion = FALSE;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                        return 0;
-                    }
-                    if (key == VK_RETURN) {
-                        if (_stricmp(g_sunlight.loveInput, "yes") == 0) {
-                            g_sunlight.loveAnswerYes = TRUE;
-                            g_sunlight.loveAnswered = TRUE;
-                            g_sunlight.showLoveQuestion = FALSE;
-                            g_sunlight.showLovePhoto = TRUE;
-                            InvalidateRect(hwnd, NULL, TRUE);
-                            return 0;
-                        } else if (_stricmp(g_sunlight.loveInput, "no") == 0) {
-                            g_sunlight.loveAnswerYes = FALSE;
-                            g_sunlight.loveAnswered = TRUE;
-                            g_sunlight.showLoveQuestion = FALSE;
-                            strcpy(g_sunlight.eggMsg, "好吧，水母有点伤心...");
-                            g_sunlight.showEggMsg = TRUE;
-                            g_sunlight.eggMsgTime = GetTickCount();
-                            InvalidateRect(hwnd, NULL, TRUE);
-                            return 0;
-                        }
-                        return 0;
-                    }
-                    if (key == VK_BACK) {
-                        if (g_sunlight.loveInputPos > 0) {
-                            g_sunlight.loveInputPos--;
-                            g_sunlight.loveInput[g_sunlight.loveInputPos] = '\0';
-                            InvalidateRect(hwnd, NULL, TRUE);
-                        }
-                        return 0;
-                    }
-                    if (isalpha(key) && g_sunlight.loveInputPos < 19) {
-                        g_sunlight.loveInput[g_sunlight.loveInputPos++] = tolower(key);
-                        g_sunlight.loveInput[g_sunlight.loveInputPos] = '\0';
-                        InvalidateRect(hwnd, NULL, TRUE);
-                        return 0;
-                    }
-                    return 0;
-                }
-                
-                if (ctrl && (key == 'J' || key == 'j')) {
-                    if (!g_sunlight.isBouncing) {
-                        g_sunlight.isBouncing = TRUE;
-                        g_sunlight.bounceStartY = g_sunlight.jellyY;
-                        g_sunlight.bounceStartTime = GetTickCount();
-                        g_sunlight.eggMsgTime = GetTickCount();
-                        strcpy(g_sunlight.eggMsg, "水母弹跳！");
-                        g_sunlight.showEggMsg = TRUE;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                    }
-                    return 0;
-                }
-                
-                if (ctrl && (key == 'C' || key == 'c')) {
-                    g_sunlight.eggMsgTime = GetTickCount();
-                    strcpy(g_sunlight.eggMsg, "彩蛋系统已加载");
-                    g_sunlight.showEggMsg = TRUE;
-                    g_sunlight.eggTriggerCount++;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                if (ctrl && key == '?') {
-                    g_sunlight.eggMsgTime = GetTickCount();
-                    strcpy(g_sunlight.eggMsg, "你终于问了");
-                    g_sunlight.showEggMsg = TRUE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                if (ctrl && key == VK_ESCAPE) {
-                    g_sunlight.eggMsgTime = GetTickCount();
-                    strcpy(g_sunlight.eggMsg, "别走，系统在等你");
-                    g_sunlight.showEggMsg = TRUE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                if (!ctrl && g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
-                    g_sunlight.isLoading = TRUE;
-                    g_sunlight.loadProgress = 0;
-                    g_sunlight.loadTextIndex = 0;
-                    g_sunlight.loadTextChangeTime = GetTickCount();
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                return 0;
-            }
-            
-            // ---- 原有键盘处理 ----
-            if (showGameEgg) {
-                HandleJellyfishGameInput(wParam, hwnd);
-                return 0;
-            }
-            
-            if (showPurpleScreen) {
-                if ((wParam == 'E' || wParam == 'e') && 
-                    GetAsyncKeyState(VK_CONTROL) && 
-                    GetAsyncKeyState(VK_MENU)) {
-                    DebugLog("紫屏中触发重启 (Ctrl+Alt+E)");
-                    ShowShutdownAnimation(hwnd);
-                    showPurpleScreen = FALSE;
-                    purpleScreenLocked = FALSE;
-                    return 0;
-                }
-                if ((wParam == 'D' || wParam == 'd') && GetAsyncKeyState(VK_CONTROL)) {
-                    HandlePurpleScreenInput('D', hwnd);
-                    return 0;
-                }
-            }
-            
-            if (showFOSEgg) {
-                if (wParam == VK_ESCAPE) {
-                    DebugLog("跳过FOS彩蛋");
-                    showFOSEgg = FALSE;
-                    showFileManager = TRUE;
-                    fosInputCount = 0;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                else if (wParam == VK_RETURN) {
-                    if (fosEggState == 5) {
-                        showFOSEgg = FALSE;
-                        showFileManager = TRUE;
-                        fosInputCount = 0;
-                    } else {
-                        switch (fosEggState) {
-                            case 1: {
-                                dialogueIndexx++;
-                                if (dialogueIndexx >= 4) {
-                                    fosEggState = 2;
-                                    dialogueIndexx = 0;
-                                    currentDevStage = 0;
-                                }
-                                break;
-                            }
-                            case 2: {
-                                currentDevStage++;
-                                if (currentDevStage >= 8) {
-                                    fosEggState = 3;
-                                    currentDevStage = 0;
-                                }
-                                break;
-                            }
-                            case 3: {
-                                currentDevStage++;
-                                if (currentDevStage >= 6) {
-                                    fosEggState = 4;
-                                    currentDevStage = 0;
-                                }
-                                break;
-                            }
-                            case 4: {
-                                showFOSEgg = FALSE;
-                                showFileManager = TRUE;
-                                fosInputCount = 0;
-                                break;
-                            }
-                        }
-                    }
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                return 0;
-            }
-            
-            if (showFileEditor) {
-                HandleFileEditorSpecialKeys(wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-                return 0;
-            }
-            
-            if (showBugList) {
-                HandleBugListInput((char)wParam);
-                InvalidateRect(hwnd, NULL, TRUE);
-                return 0;
-            }
-            
-            if (showOOBE) {
-                if (wParam == VK_TAB) {
-                    switch (currentStep) {
-                        case 1: currentStep = 2; break;
-                        case 2: currentStep = 3; break;
-                        case 3: currentStep = 3; break;
-                    }
-                    InvalidateRect(hwnd, NULL, TRUE);
-                }
-            }
-            else if (showLogin) {
-                if (wParam == VK_TAB && currentStep == 0) {
-                    currentStep = 1;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                }
-            }
-            else if (showDesktop) {
-                if (wParam == VK_F1) {
-                    DebugLog("快捷键F1: 打开计算器");
-                    ShowCalculator(hwnd);
-                }
-                else if (wParam == VK_F2) {
-                    DebugLog("快捷键F2: 打开系统信息");
-                    ShowSystemInfo(hwnd);
-                }
-                else if (wParam == VK_F3) {
-                    DebugLog("快捷键F3: 打开文件管理器");
-                    ShowFileManager(hwnd);
-                }
-                else if (wParam == VK_F4 && isActivated) {
-                    DebugLog("快捷键F4: 打开设置");
-                    ShowSettings(hwnd);
-                }
-                else if (wParam == VK_F5) {
-                    DebugLog("快捷键F5: 打开Bug报告");
-                    ShowBugReporter(hwnd);
-                }
-                else if (wParam == VK_F6 && isActivated) {
-                    DebugLog("快捷键F6: 打开Bug列表");
-                    ShowBugList(hwnd);
-                }
-                else if (wParam == VK_F7) {
-                    DebugLog("快捷键F7: 打开日历");
-                    ShowCalendar(hwnd);
-                }
-            }
-            break;
-        }
-        
-        case WM_LBUTTONDOWN: {
-            int x = LOWORD(lParam);
-            int y = HIWORD(lParam);
-            
-            // ---- 安装界面鼠标点击 ----
-            if (g_install.isInstalling && !g_install.isComplete) {
-                if (g_install.isPaused) {
-                    g_install.isPaused = FALSE;
-                    g_install.slideStartTime = GetTickCount();
-                    InvalidateRect(hwnd, NULL, FALSE);
-                } else {
-                    HandleInstallInput(VK_RETURN, hwnd);
-                }
-                return 0;
-            }
-            
-            DebugLog("鼠标点击: (%d, %d)", x, y);
-            
-            // ---- 阳间版启动动画鼠标处理 ----
-            if (g_useSunlightLauncher && !g_sunlight.isFinished) {
-                RECT rect;
-                GetClientRect(hwnd, &rect);
-                int cx = (rect.left + rect.right) / 2;
-                int cy = (rect.top + rect.bottom) / 2;
-                
-                if (g_sunlight.showLovePhoto || g_sunlight.showLoveQuestion) {
-                    return 0;
-                }
-                
-                if (x > cx - 200 && x < cx + 200 && y > cy - 80 && y < cy + 30) {
-                    g_sunlight.eggMsgTime = GetTickCount();
-                    strcpy(g_sunlight.eggMsg, "JELLYFISH STUDIO");
-                    g_sunlight.showEggMsg = TRUE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                int jx = (int)g_sunlight.jellyX;
-                int jy = (int)g_sunlight.jellyY;
-                if (g_sunlight.isBirthday && !g_sunlight.hasEntered && g_sunlight.entryX > -50) {
-                    jx = (int)g_sunlight.entryX;
-                    jy = (int)g_sunlight.entryY;
-                }
-                if (x > jx - 70 && x < jx + 70 && y > jy - 60 && y < jy + 60) {
-                    if (g_sunlight.isLoveDay) {
-                        g_sunlight.showLoveQuestion = TRUE;
-                        g_sunlight.loveInput[0] = '\0';
-                        g_sunlight.loveInputPos = 0;
-                        g_sunlight.loveAnswered = FALSE;
-                        g_sunlight.loveAnswerYes = FALSE;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                        return 0;
-                    } else {
-                        g_sunlight.eggMsgTime = GetTickCount();
-                        strcpy(g_sunlight.eggMsg, "水母说：你好！");
-                        g_sunlight.showEggMsg = TRUE;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                        return 0;
-                    }
-                }
-                
-                if (x > cx - 300 && x < cx + 300 && y > cy + 90 && y < cy + 120) {
-                    const char* quotes[] = {
-                        "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
-                        "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
-                        "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
-                        "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
-                        "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
-                    };
-                    int idx = rand() % 15;
-                    strcpy(g_sunlight.quote, quotes[idx]);
-                    g_sunlight.quoteChangeTime = GetTickCount();
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                if (x > 20 && x < 200 && y > rect.bottom - 40 && y < rect.bottom - 10) {
-                    g_sunlight.eggMsgTime = GetTickCount();
-                    strcpy(g_sunlight.eggMsg, "JammyJellyfish");
-                    g_sunlight.showEggMsg = TRUE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                static DWORD lastClick = 0;
-                static int clickCount = 0;
-                if (y > rect.bottom - 60 && y < rect.bottom - 10) {
-                    DWORD now = GetTickCount();
-                    if (now - lastClick < 500) {
-                        clickCount++;
-                        if (clickCount >= 2) {
-                            g_sunlight.eggMsgTime = GetTickCount();
-                            strcpy(g_sunlight.eggMsg, "你是开发人员吗？");
-                            g_sunlight.showEggMsg = TRUE;
-                            clickCount = 0;
-                            InvalidateRect(hwnd, NULL, TRUE);
-                        }
-                    } else {
-                        clickCount = 1;
-                    }
-                    lastClick = now;
-                    return 0;
-                }
-                
-                if (g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
-                    g_sunlight.isLoading = TRUE;
-                    g_sunlight.loadProgress = 0;
-                    g_sunlight.loadTextIndex = 0;
-                    g_sunlight.loadTextChangeTime = GetTickCount();
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                return 0;
-            }
-            
-            // ---- 原有鼠标处理 ----
-            if (showGameEgg) {
-                return 0;
-            }
-            
-            if (showFOSEgg && fosEggState == 5) {
-                RECT rect;
-                GetClientRect(hwnd, &rect);
-                int centerX = rect.right / 2;
-                
-                if (x >= centerX - 100 && x <= centerX + 100 && y >= rect.bottom - 60) {
-                    DebugLog("点击ESC提示区域，退出水母求饶");
-                    showFOSEgg = FALSE;
-                    showFileManager = TRUE;
-                    fosInputCount = 0;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                }
-                return 0;
-            }
-            
-            if (showBugList) {
-                AppRect bugListRect = GetAppRect(hwnd, 8);
-                int relX = x - bugListRect.left;
-                int relY = y - bugListRect.top;
-                
-                RECT listRect = {bugListRect.left + 20, bugListRect.top + 50, 
-                                 bugListRect.right - 20, bugListRect.bottom - 80};
-                if (relX >= 20 && relX <= (bugListRect.right - bugListRect.left - 20) &&
-                    relY >= 50 && relY <= (bugListRect.bottom - bugListRect.top - 80)) {
-                    
-                    int itemHeight = 25;
-                    int startY = 90;
-                    int clickIndex = (relY - startY) / itemHeight + bugListScroll;
-                    
-                    if (clickIndex >= 0 && clickIndex < bugListCount) {
-                        selectedBugIndex = clickIndex;
-                        DebugLog("选中Bug索引: %d", clickIndex);
-                        InvalidateRect(hwnd, NULL, TRUE);
-                    }
-                    
-                    int col1 = 30;
-                    if (relX >= col1 && relX <= col1 + 15 && 
-                        relY >= startY + clickIndex * itemHeight + 5 && 
-                        relY <= startY + clickIndex * itemHeight + 20) {
-                        if (clickIndex >= 0 && clickIndex < bugListCount) {
-                            ToggleBugFixedStatus(clickIndex);
-                            DebugLog("切换Bug修复状态: %d", clickIndex);
-                            InvalidateRect(hwnd, NULL, TRUE);
-                        }
-                    }
-                    return 0;
-                }
-                
-                int buttonWidth = 100;
-                int buttonHeight = 35;
-                int buttonY = bugListRect.bottom - 60;
-                int centerX = (bugListRect.right - bugListRect.left) / 2;
-                int buttonSpacing = 120;
-                
-                RECT toggleButtonRect = {centerX - buttonSpacing * 2, buttonY, 
-                                         centerX - buttonSpacing * 2 + buttonWidth, buttonY + buttonHeight};
-                if (relX >= centerX - buttonSpacing * 2 && relX <= centerX - buttonSpacing * 2 + buttonWidth &&
-                    relY >= buttonY && relY <= buttonY + buttonHeight && selectedBugIndex >= 0) {
-                    ToggleBugFixedStatus(selectedBugIndex);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT deleteButtonRect = {centerX - buttonSpacing, buttonY, 
-                                         centerX - buttonSpacing + buttonWidth, buttonY + buttonHeight};
-                if (relX >= centerX - buttonSpacing && relX <= centerX - buttonSpacing + buttonWidth &&
-                    relY >= buttonY && relY <= buttonY + buttonHeight && selectedBugIndex >= 0) {
-                    DeleteBug(selectedBugIndex);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT refreshButtonRect = {centerX, buttonY, centerX + buttonWidth, buttonY + buttonHeight};
-                if (relX >= centerX && relX <= centerX + buttonWidth &&
-                    relY >= buttonY && relY <= buttonY + buttonHeight) {
-                    LoadBugListFromFile();
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT closeButtonRect = {centerX + buttonSpacing, buttonY, 
-                                        centerX + buttonSpacing + buttonWidth, buttonY + buttonHeight};
-                if (relX >= centerX + buttonSpacing && relX <= centerX + buttonSpacing + buttonWidth &&
-                    relY >= buttonY && relY <= buttonY + buttonHeight) {
-                    showBugList = FALSE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                return 0;
-            }
-            
-            if (showBugReporter) {
-                AppRect bugRect = GetAppRect(hwnd, 7);
-                int relX = x - bugRect.left;
-                int relY = y - bugRect.top;
-                
-                if (bugSubmitted) {
-                    RECT closeButtonRect = {bugRect.left + 340, bugRect.top + 350, 
-                                            bugRect.left + 460, bugRect.top + 390};
-                    if (relX >= 340 && relX <= 460 && relY >= 350 && relY <= 390) {
-                        showBugReporter = FALSE;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                    }
-                    return 0;
-                }
-                
-                RECT categoryRect = {bugRect.left + 120, bugRect.top + 95, 
-                                     bugRect.left + 370, bugRect.top + 125};
-                if (relX >= 120 && relX <= 370 && relY >= 95 && relY <= 125) {
-                    int categoryWidth = 250 / 5;
-                    int selectedCategory = (relX - 120) / categoryWidth;
-                    bugCategory = selectedCategory;
-                    DebugLog("选择Bug分类: %d", selectedCategory);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT severityRect = {bugRect.left + 120, bugRect.top + 135, 
-                                     bugRect.left + 370, bugRect.top + 165};
-                if (relX >= 120 && relX <= 370 && relY >= 135 && relY <= 165) {
-                    int severityWidth = 250 / 4;
-                    int selectedSeverity = (relX - 120) / severityWidth + 1;
-                    bugSeverity = selectedSeverity;
-                    DebugLog("选择严重程度: %d", selectedSeverity);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT titleInputRect = {bugRect.left + 120, bugRect.top + 55, 
-                                       bugRect.right - 20, bugRect.top + 85};
-                if (relX >= 120 && relX <= (bugRect.right - bugRect.left - 20) && 
-                    relY >= 55 && relY <= 85) {
-                    currentField = 0;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT descInputRect = {bugRect.left + 20, bugRect.top + 205, 
-                                      bugRect.right - 20, bugRect.top + 350};
-                if (relX >= 20 && relX <= (bugRect.right - bugRect.left - 20) && 
-                    relY >= 205 && relY <= 350) {
-                    currentField = 1;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT submitButtonRect = {bugRect.left + 280, bugRect.top + 550, 
-                                         bugRect.left + 380, bugRect.top + 585};
-                if (relX >= 280 && relX <= 380 && relY >= 550 && relY <= 585) {
-                    SubmitBugReport();
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT cancelButtonRect = {bugRect.left + 420, bugRect.top + 550, 
-                                         bugRect.left + 520, bugRect.top + 585};
-                if (relX >= 420 && relX <= 520 && relY >= 550 && relY <= 585) {
-                    showBugReporter = FALSE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                return 0;
-            }
-            
-            if (showOOBE) {
-                RECT clientRect;
-                GetClientRect(hwnd, &clientRect);
-                int centerX = clientRect.right / 2;
-                int centerY = clientRect.bottom / 2;
-                
-                switch (currentStep) {
-                    case 0: {
-                        RECT buttonRect = {centerX - 80, centerY + 80, centerX + 80, centerY + 120};
-                        if (x >= buttonRect.left && x <= buttonRect.right &&
-                            y >= buttonRect.top && y <= buttonRect.bottom) {
-                            DebugLog("OOBE: 点击开始设置");
-                            currentStep = 1;
-                            InvalidateRect(hwnd, NULL, TRUE);
-                        }
-                        break;
-                    }
-                    case 2: {
-                        RECT skipButtonRect = {centerX - 200, centerY + 20, centerX + 200, centerY + 60};
-                        if (x >= skipButtonRect.left && x <= skipButtonRect.right &&
-                            y >= skipButtonRect.top && y <= skipButtonRect.bottom) {
-                            DebugLog("OOBE: 跳过密码设置");
-                            skipPasswordSetup = TRUE;
-                            currentStep = 3;
-                            InvalidateRect(hwnd, NULL, TRUE);
-                        }
-                        break;
-                    }
-                    case 3: {
-                        int themeWidth = 400 / 4;
-                        int themeStartX = centerX - 200;
-                        int themeStartY = centerY - 10;
-                        
-                        for (int i = 0; i < 4; i++) {
-                            int themeX = themeStartX + i * themeWidth;
-                            if (x >= themeX && x <= themeX + themeWidth &&
-                                y >= themeStartY && y <= themeStartY + 80) {
-                                currentThemeIndex = i;
-                                DebugLog("OOBE: 选择主题 %d", i);
-                                InvalidateRect(hwnd, NULL, TRUE);
-                                break;
-                            }
-                        }
-                        
-                        RECT completeButtonRect = {centerX - 80, centerY + 130, centerX + 80, centerY + 170};
-                        if (x >= completeButtonRect.left && x <= completeButtonRect.right &&
-                            y >= completeButtonRect.top && y <= completeButtonRect.bottom) {
-                            if (ValidateOOBEInput()) {
-                                DebugLog("OOBE: 完成配置");
-                                CompleteOOBE(hwnd);
-                            }
-                        }
-                        break;
-                    }
-                }
-                return 0;
-            }
-            
-            if (showSettings) {
-                AppRect settingsRect = GetAppRect(hwnd, 6);
-                int relX = x - settingsRect.left;
-                int relY = y - settingsRect.top;
-                
-                if (settingsCurrentStep == 2) {
-                    int themeWidth = 400 / 4;
-                    int themeStartX = settingsRect.left + 50;
-                    int themeStartY = settingsRect.top + 220;
-                    
-                    for (int i = 0; i < 4; i++) {
-                        int themeX = themeStartX + i * themeWidth;
-                        if (relX >= themeX && relX <= themeX + themeWidth &&
-                            relY >= themeStartY && relY <= themeStartY + 120) {
-                            currentThemeIndex = i;
-                            DebugLog("设置: 选择主题 %d", i);
-                            InvalidateRect(hwnd, NULL, TRUE);
-                            return 0;
-                        }
-                    }
-                }
-                
-                int buttonWidth = 100;
-                int buttonHeight = 35;
-                int buttonY = settingsRect.top + 480;
-                
-                if (settingsCurrentStep > 0) {
-                    RECT prevButtonRect = {settingsRect.left + 130, buttonY, 
-                                           settingsRect.left + 130 + buttonWidth, buttonY + buttonHeight};
-                    if (relX >= 130 && relX <= 130 + buttonWidth && relY >= 480 && relY <= 480 + buttonHeight) {
-                        settingsCurrentStep--;
-                        DebugLog("设置: 上一步");
-                        InvalidateRect(hwnd, NULL, TRUE);
-                        return 0;
-                    }
-                }
-                
-                RECT nextButtonRect = {settingsRect.left + 250, buttonY, 
-                                       settingsRect.left + 250 + buttonWidth, buttonY + buttonHeight};
-                if (relX >= 250 && relX <= 250 + buttonWidth && relY >= 480 && relY <= 480 + buttonHeight) {
-                    if (ValidateSettingsInput()) {
-                        if (settingsCurrentStep < 2) {
-                            settingsCurrentStep++;
-                            DebugLog("设置: 下一步");
-                        } else {
-                            DebugLog("设置: 应用设置");
-                            ApplySettings();
-                            showSettings = FALSE;
-                        }
-                        InvalidateRect(hwnd, NULL, TRUE);
-                    }
-                    return 0;
-                }
-                
-                RECT cancelButtonRect = {settingsRect.left + 370, buttonY, 
-                                         settingsRect.left + 370 + buttonWidth, buttonY + buttonHeight};
-                if (relX >= 370 && relX <= 370 + buttonWidth && relY >= 480 && relY <= 480 + buttonHeight) {
-                    DebugLog("设置: 取消");
-                    showSettings = FALSE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                return 0;
-            }
-            
-            if (showFileEditor) {
-                AppRect editorRect = GetAppRect(hwnd, 5);
-                int relX = x - editorRect.left;
-                int relY = y - editorRect.top;
-                
-                RECT saveButton = {editorRect.left + 10, editorRect.top + 35, 
-                                   editorRect.left + 60, editorRect.top + 55};
-                if (relX >= 10 && relX <= 60 && relY >= 35 && relY <= 55) {
-                    DebugLog("编辑器: 保存文件");
-                    SaveFileContent();
-                    return 0;
-                }
-                
-                RECT exitButton = {editorRect.left + 70, editorRect.top + 35, 
-                                   editorRect.left + 120, editorRect.top + 55};
-                if (relX >= 70 && relX <= 120 && relY >= 35 && relY <= 55) {
-                    DebugLog("编辑器: 退出");
-                    showFileEditor = FALSE;
-                    showFileManager = TRUE;
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT formatButton = {editorRect.left + 130, editorRect.top + 35, 
-                                     editorRect.left + 200, editorRect.top + 55};
-                if (relX >= 130 && relX <= 200 && relY >= 35 && relY <= 55) {
-                    textFormat = (textFormat + 1) % 4;
-                    DebugLog("编辑器: 切换格式 %d", textFormat);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                    return 0;
-                }
-                
-                RECT editRect = {editorRect.left + 10, editorRect.top + 70, 
-                                 editorRect.right - 10, editorRect.bottom - 10};
-                if (relX >= 10 && relX <= (editorRect.right - editorRect.left - 10) &&
-                    relY >= 70 && relY <= (editorRect.bottom - editorRect.top - 10)) {
-                    isEditing = TRUE;
-                    cursorPosition = strlen(fileContent);
-                    InvalidateRect(hwnd, NULL, TRUE);
-                }
-                return 0;
-            }
-            
-            if (showDesktop) {
-                int buttonWidth = 100;
-                int buttonHeight = 40;
-                int buttonY = 10;
-                int buttonStartX = 200;
-                int buttonSpacing = 110;
-                int buttonIndex = 0;
-                
-                int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
-                if (x >= desktopRect.left && x <= desktopRect.right &&
-                    y >= desktopRect.top && y <= desktopRect.bottom) {
-                    isDesktopPressed = TRUE;
-                    InvalidateRect(hwnd, &desktopRect, TRUE);
-                    return 0;
-                }
-                
-                int fileX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
-                if (x >= fileRect.left && x <= fileRect.right &&
-                    y >= fileRect.top && y <= fileRect.bottom) {
-                    isFileManagerPressed = TRUE;
-                    InvalidateRect(hwnd, &fileRect, TRUE);
-                    return 0;
-                }
-                
-                int calcX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
-                if (x >= calcRect.left && x <= calcRect.right &&
-                    y >= calcRect.top && y <= calcRect.bottom) {
-                    isCalcPressed = TRUE;
-                    InvalidateRect(hwnd, &calcRect, TRUE);
-                    return 0;
-                }
-                
-                int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
-                if (x >= sysinfoRect.left && x <= sysinfoRect.right &&
-                    y >= sysinfoRect.top && y <= sysinfoRect.bottom) {
-                    isSysInfoPressed = TRUE;
-                    InvalidateRect(hwnd, &sysinfoRect, TRUE);
-                    return 0;
-                }
-                
-                if (isActivated) {
-                    int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
-                    if (x >= settingsRect.left && x <= settingsRect.right &&
-                        y >= settingsRect.top && y <= settingsRect.bottom) {
-                        isSettingsPressed = TRUE;
-                        InvalidateRect(hwnd, &settingsRect, TRUE);
-                        return 0;
-                    }
-                }
-                
-                if (showGameButton) {
-                    int gameX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
-                    if (x >= gameRect.left && x <= gameRect.right &&
-                        y >= gameRect.top && y <= gameRect.bottom) {
-                        isGamePressed = TRUE;
-                        InvalidateRect(hwnd, &gameRect, TRUE);
-                        return 0;
-                    }
-                }
-                
-                if (isActivated) {
-                    int bugX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
-                    if (x >= bugRect.left && x <= bugRect.right &&
-                        y >= bugRect.top && y <= bugRect.bottom) {
-                        isBugPressed = TRUE;
-                        InvalidateRect(hwnd, &bugRect, TRUE);
-                        return 0;
-                    }
-                    
-                    int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
-                    if (x >= bugListRect.left && x <= bugListRect.right &&
-                        y >= bugListRect.top && y <= bugListRect.bottom) {
-                        isBugListPressed = TRUE;
-                        InvalidateRect(hwnd, &bugListRect, TRUE);
-                        return 0;
-                    }
-                }
-                
-                int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
-                if (x >= calendarRect.left && x <= calendarRect.right &&
-                    y >= calendarRect.top && y <= calendarRect.bottom) {
-                    isCalendarPressed = TRUE;
-                    InvalidateRect(hwnd, &calendarRect, TRUE);
-                    return 0;
-                }
-                
-                int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
-                if (x >= shutdownRect.left && x <= shutdownRect.right &&
-                    y >= shutdownRect.top && y <= shutdownRect.bottom) {
-                    isShutdownPressed = TRUE;
-                    InvalidateRect(hwnd, &shutdownRect, TRUE);
-                    return 0;
-                }
-            }
-            else if (showCDKeyScreen) {
-                int centerX = GetSystemMetrics(SM_CXSCREEN) / 2;
-                int centerY = GetSystemMetrics(SM_CYSCREEN) / 2;
-                int buttonY = centerY + 180;
-                int buttonWidth = 120;
-                int buttonHeight = 40;
-                
-                if (x >= centerX - 270 && x <= centerX - 270 + buttonWidth && 
-                    y >= buttonY && y <= buttonY + buttonHeight) {
-                    DebugLog("CDKEY: 点击激活");
-                    HandleCDKeyInput(13);
-                }
-                else if (x >= centerX - 130 && x <= centerX - 130 + buttonWidth && 
-                         y >= buttonY && y <= buttonY + buttonHeight) {
-                    DebugLog("CDKEY: 点击试用");
-                    StartTrialMode(hwnd);
-                }
-                else if (x >= centerX + 10 && x <= centerX + 10 + buttonWidth && 
-                         y >= buttonY && y <= buttonY + buttonHeight) {
-                    DebugLog("CDKEY: 点击退出");
-                    PostQuitMessage(0);
-                }
-            }
-            else if (showCalculator && !showGameEgg) {
-                AppRect calcRect = GetAppRect(hwnd, 1);
-                int relX = x - calcRect.left;
-                int relY = y - calcRect.top;
-                
-                if (showFinalEgg) {
-                    int centerX = (calcRect.right - calcRect.left) / 2;
-                    int centerY = (calcRect.bottom - calcRect.top) / 2;
-                    RECT closeButtonRect = {centerX - 60, centerY + 180, centerX + 60, centerY + 220};
-                    
-                    if (relX >= closeButtonRect.left && relX <= closeButtonRect.right &&
-                        relY >= closeButtonRect.top && relY <= closeButtonRect.bottom) {
-                        showFinalEgg = FALSE;
-                        showSpecialMessage = FALSE;
-                        specialMessageScrollY = 0;
-                        InvalidateRect(hwnd, NULL, TRUE);
-                    }
-                    return 0;
-                }
-                
-                if (showSpecialMessage) {
-                    return 0;
-                }
-                
-                int buttonWidth = 70;
-                int buttonHeight = 40;
-                int startX = calcRect.left + 35;
-                int startY = calcRect.top + 130;
-                
-                if (relY >= startY && relY <= startY + buttonHeight) {
-                    if (relX >= startX && relX <= startX + buttonWidth) {
-                        CalculatorButtonClick("7");
-                    } else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
-                        CalculatorButtonClick("8");
-                    } else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
-                        CalculatorButtonClick("9");
-                    } else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
-                        CalculatorButtonClick("+");
-                    }
-                }
-                else if (relY >= startY + 50 && relY <= startY + 50 + buttonHeight) {
-                    if (relX >= startX && relX <= startX + buttonWidth) {
-                        CalculatorButtonClick("4");
-                    } else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
-                        CalculatorButtonClick("5");
-                    } else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
-                        CalculatorButtonClick("6");
-                    } else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
-                        CalculatorButtonClick("-");
-                    }
-                }
-                else if (relY >= startY + 100 && relY <= startY + 100 + buttonHeight) {
-                    if (relX >= startX && relX <= startX + buttonWidth) {
-                        CalculatorButtonClick("1");
-                    } else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
-                        CalculatorButtonClick("2");
-                    } else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
-                        CalculatorButtonClick("3");
-                    } else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
-                        CalculatorButtonClick("*");
-                    }
-                }
-                else if (relY >= startY + 150 && relY <= startY + 150 + buttonHeight) {
-                    if (relX >= startX && relX <= startX + buttonWidth) {
-                        CalculatorButtonClick("0");
-                    } else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
-                        CalculatorButtonClick("C");
-                    } else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
-                        CalculatorButtonClick("=");
-                        CheckSpecialMessage();
-                    } else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
-                        CalculatorButtonClick("/");
-                    }
-                }
-                else if (relY >= startY + 200 && relY <= startY + 200 + buttonHeight) {
-                    if (relX >= startX && relX <= startX + buttonWidth) {
-                        CalculatorButtonClick(".");
-                    }
-                }
-                
-                InvalidateRect(hwnd, NULL, TRUE);
-                return 0;
-            }
-            
-            if (showCalendar && !showEventDialog) {
-                RECT clientRect;
-                GetClientRect(hwnd, &clientRect);
-                int centerX = clientRect.right / 2;
-                int centerY = clientRect.bottom / 2;
-                HandleCalendarMouseClick(x, y, centerX, centerY);
-                InvalidateRect(hwnd, NULL, TRUE);
-                return 0;
-            }
-            break;
-        }
-        
-        case WM_LBUTTONUP: {
-            int x = LOWORD(lParam);
-            int y = HIWORD(lParam);
-            
-            if (showDesktop) {
-                int buttonWidth = 100;
-                int buttonHeight = 40;
-                int buttonY = 10;
-                int buttonStartX = 200;
-                int buttonSpacing = 110;
-                int buttonIndex = 0;
-                
-                int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
-                if (isDesktopPressed) {
-                    isDesktopPressed = FALSE;
-                    InvalidateRect(hwnd, &desktopRect, TRUE);
-                    if (x >= desktopRect.left && x <= desktopRect.right &&
-                        y >= desktopRect.top && y <= desktopRect.bottom) {
-                        DebugLog("点击: 显示桌面");
-                        CloseAllApps(hwnd);
-                    }
-                }
-                
-                int fileX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
-                if (isFileManagerPressed) {
-                    isFileManagerPressed = FALSE;
-                    InvalidateRect(hwnd, &fileRect, TRUE);
-                    if (x >= fileRect.left && x <= fileRect.right &&
-                        y >= fileRect.top && y <= fileRect.bottom) {
-                        DebugLog("点击: 文件管理器");
-                        ShowFileManager(hwnd);
-                    }
-                }
-                
-                int calcX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
-                if (isCalcPressed) {
-                    isCalcPressed = FALSE;
-                    InvalidateRect(hwnd, &calcRect, TRUE);
-                    if (x >= calcRect.left && x <= calcRect.right &&
-                        y >= calcRect.top && y <= calcRect.bottom) {
-                        DebugLog("点击: 计算器");
-                        ShowCalculator(hwnd);
-                    }
-                }
-                
-                int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
-                if (isSysInfoPressed) {
-                    isSysInfoPressed = FALSE;
-                    InvalidateRect(hwnd, &sysinfoRect, TRUE);
-                    if (x >= sysinfoRect.left && x <= sysinfoRect.right &&
-                        y >= sysinfoRect.top && y <= sysinfoRect.bottom) {
-                        DebugLog("点击: 系统信息");
-                        ShowSystemInfo(hwnd);
-                    }
-                }
-                
-                if (isActivated) {
-                    int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
-                    if (isSettingsPressed) {
-                        isSettingsPressed = FALSE;
-                        InvalidateRect(hwnd, &settingsRect, TRUE);
-                        if (x >= settingsRect.left && x <= settingsRect.right &&
-                            y >= settingsRect.top && y <= settingsRect.bottom) {
-                            DebugLog("点击: 系统设置");
-                            ShowSettings(hwnd);
-                        }
-                    }
-                }
-                
-                if (showGameButton) {
-                    int gameX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
-                    if (isGamePressed) {
-                        isGamePressed = FALSE;
-                        InvalidateRect(hwnd, &gameRect, TRUE);
-                        if (x >= gameRect.left && x <= gameRect.right &&
-                            y >= gameRect.top && y <= gameRect.bottom) {
-                            DebugLog("点击: 水母游戏");
-                            showGameEgg = TRUE;
-                            showDesktop = FALSE;
-                            if (!gameInitialized) {
-                                InitializeJellyfishGame();
-                                gameInitialized = TRUE;
-                            }
-                            SetTimer(hwnd, 9, 50, NULL);
-                            InvalidateRect(hwnd, NULL, TRUE);
-                        }
-                    }
-                }
-                
-                if (isActivated) {
-                    int bugX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
-                    if (isBugPressed) {
-                        isBugPressed = FALSE;
-                        InvalidateRect(hwnd, &bugRect, TRUE);
-                        if (x >= bugRect.left && x <= bugRect.right &&
-                            y >= bugRect.top && y <= bugRect.bottom) {
-                            DebugLog("点击: Bug报告");
-                            ShowBugReporter(hwnd);
-                        }
-                    }
-                    
-                    int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
-                    if (isBugListPressed) {
-                        isBugListPressed = FALSE;
-                        InvalidateRect(hwnd, &bugListRect, TRUE);
-                        if (x >= bugListRect.left && x <= bugListRect.right &&
-                            y >= bugListRect.top && y <= bugListRect.bottom) {
-                            DebugLog("点击: Bug列表");
-                            ShowBugList(hwnd);
-                        }
-                    }
-                }
-                
-                int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
-                if (isCalendarPressed) {
-                    isCalendarPressed = FALSE;
-                    InvalidateRect(hwnd, &calendarRect, TRUE);
-                    if (x >= calendarRect.left && x <= calendarRect.right &&
-                        y >= calendarRect.top && y <= calendarRect.bottom) {
-                        DebugLog("点击: 日历");
-                        ShowCalendar(hwnd);
-                    }
-                }
-                
-                int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
-                if (isShutdownPressed) {
-                    isShutdownPressed = FALSE;
-                    InvalidateRect(hwnd, &shutdownRect, TRUE);
-                    if (x >= shutdownRect.left && x <= shutdownRect.right &&
-                        y >= shutdownRect.top && y <= shutdownRect.bottom) {
-                        DebugLog("点击: 关机");
-                        ShutdownSystem(hwnd);
-                    }
-                }
-            }
-            break;
-        }
-        
-        case WM_MOUSEMOVE: {
-            int x = LOWORD(lParam);
-            int y = HIWORD(lParam);
-            
-            if (showDesktop) {
-                int buttonWidth = 100;
-                int buttonHeight = 40;
-                int buttonY = 10;
-                int buttonStartX = 200;
-                int buttonSpacing = 110;
-                int buttonIndex = 0;
-                
-                int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
-                BOOL wasDesktopHovered = isDesktopHovered;
-                isDesktopHovered = (x >= desktopRect.left && x <= desktopRect.right &&
-                                  y >= desktopRect.top && y <= desktopRect.bottom);
-                
-                int fileX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
-                BOOL wasFileManagerHovered = isFileManagerHovered;
-                isFileManagerHovered = (x >= fileRect.left && x <= fileRect.right &&
-                                      y >= fileRect.top && y <= fileRect.bottom);
-                
-                int calcX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
-                BOOL wasCalcHovered = isCalcHovered;
-                isCalcHovered = (x >= calcRect.left && x <= calcRect.right &&
-                               y >= calcRect.top && y <= calcRect.bottom);
-                
-                int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
-                BOOL wasSysInfoHovered = isSysInfoHovered;
-                isSysInfoHovered = (x >= sysinfoRect.left && x <= sysinfoRect.right &&
-                                  y >= sysinfoRect.top && y <= sysinfoRect.bottom);
-                
-                BOOL wasSettingsHovered = isSettingsHovered;
-                if (isActivated) {
-                    int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
-                    isSettingsHovered = (x >= settingsRect.left && x <= settingsRect.right &&
-                                       y >= settingsRect.top && y <= settingsRect.bottom);
-                } else {
-                    isSettingsHovered = FALSE;
-                }
-                
-                BOOL wasGameHovered = isGameHovered;
-                if (showGameButton) {
-                    int gameX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
-                    isGameHovered = (x >= gameRect.left && x <= gameRect.right &&
-                                   y >= gameRect.top && y <= gameRect.bottom);
-                } else {
-                    isGameHovered = FALSE;
-                }
-                
-                BOOL wasBugHovered = isBugHovered;
-                if (isActivated) {
-                    int bugX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
-                    isBugHovered = (x >= bugRect.left && x <= bugRect.right &&
-                                  y >= bugRect.top && y <= bugRect.bottom);
-                } else {
-                    isBugHovered = FALSE;
-                }
-                
-                BOOL wasBugListHovered = isBugListHovered;
-                if (isActivated) {
-                    int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
-                    RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
-                    isBugListHovered = (x >= bugListRect.left && x <= bugListRect.right &&
-                                      y >= bugListRect.top && y <= bugListRect.bottom);
-                } else {
-                    isBugListHovered = FALSE;
-                }
-                
-                int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
-                BOOL wasCalendarHovered = isCalendarHovered;
-                isCalendarHovered = (x >= calendarRect.left && x <= calendarRect.right &&
-                                   y >= calendarRect.top && y <= calendarRect.bottom);
-                
-                int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
-                RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
-                BOOL wasShutdownHovered = isShutdownHovered;
-                isShutdownHovered = (x >= shutdownRect.left && x <= shutdownRect.right &&
-                                   y >= shutdownRect.top && y <= shutdownRect.bottom);
-                
-                if (wasDesktopHovered != isDesktopHovered || 
-                    wasFileManagerHovered != isFileManagerHovered ||
-                    wasCalcHovered != isCalcHovered ||
-                    wasSysInfoHovered != isSysInfoHovered ||
-                    wasSettingsHovered != isSettingsHovered ||
-                    wasGameHovered != isGameHovered ||
-                    wasBugHovered != isBugHovered ||
-                    wasBugListHovered != isBugListHovered ||
-                    wasCalendarHovered != isCalendarHovered ||
-                    wasShutdownHovered != isShutdownHovered) {
-                    RECT taskbarRect = {0, 0, GetSystemMetrics(SM_CXSCREEN), 60};
-                    InvalidateRect(hwnd, &taskbarRect, TRUE);
-                }
-                
-                if (isDesktopHovered || isFileManagerHovered || isCalcHovered || 
-                    isSysInfoHovered || isSettingsHovered || isGameHovered || 
-                    isBugHovered || isBugListHovered || isCalendarHovered || 
-                    isShutdownHovered) {
-                    SetCursor(LoadCursor(NULL, IDC_HAND));
-                } else {
-                    SetCursor(LoadCursor(NULL, IDC_ARROW));
-                }
-            }
-            break;
-        }
-        
-        case WM_DESTROY: {
-            DebugLog("========== WM_DESTROY 开始 ==========");
-            DebugLog("最终内存状态:");
-            DebugLog("  分配: %d, 释放: %d, 泄漏: %d", 
-                     g_memAllocCount, g_memFreeCount, g_memAllocCount - g_memFreeCount);
-            
-            if (g_memAllocCount - g_memFreeCount > 0) {
-                DebugLog("警告: 存在内存泄漏!");
-                MemBlock* block = g_memHead;
-                int count = 0;
-                while (block) {
-                    DebugLog("  泄漏 [%d] %s(%d): %zu 字节", 
-                             ++count, block->file, block->line, block->size);
-                    block = block->next;
-                }
-            }
-            
-            KillTimer(hwnd, 1);
-            KillTimer(hwnd, 2);
-            KillTimer(hwnd, 3);
-            KillTimer(hwnd, 4);
-            KillTimer(hwnd, 5);
-            KillTimer(hwnd, 6);
-            KillTimer(hwnd, 7);
-            KillTimer(hwnd, 8);
-            KillTimer(hwnd, 9);
-            KillTimer(hwnd, 98);  // 安装引导定时器
-            KillTimer(hwnd, 99);  // 阳间版启动动画定时器
-            
-            if (hIMC) {
-                ImmReleaseContext(hwnd, hIMC);
-                hIMC = NULL;
-            }
-            
-            if (hBackgroundBitmap) {
-                DeleteObject(hBackgroundBitmap);
-            }
-            if (hEthernetBackground) {
-                DeleteObject(hEthernetBackground);
-            }
-            
-            if (g_sunlight.hPhoto) {
-                DeleteObject(g_sunlight.hPhoto);
-                g_sunlight.hPhoto = NULL;
-            }
-            
-            SaveConfig();
-            SaveCalendarEvents();
-            
-            DebugLog("========== WM_DESTROY 完成 ==========");
-            if (g_debugLog) {
-                fclose(g_debugLog);
-                g_debugLog = NULL;
-            }
-            
-            PostQuitMessage(0);
-            break;
-        }
-        
-        case WM_ERASEBKGND: {
-            return 1;
-        }
-        
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            
-            RECT rect;
-            GetClientRect(hwnd, &rect);
-            int centerX = rect.right / 2;
-            int centerY = rect.bottom / 2;
-            
-            if (showPurpleScreen) {
-                DrawCriticalPurpleScreen(hdc, rect);
-                EndPaint(hwnd, &ps);
-                return 0;
-            }
-            
-            // ---- 1. 安装引导（最高优先级） ----
-            if (g_install.isInstalling && !g_install.isComplete) {
-                DrawInstallSlide(hdc, rect);
-                EndPaint(hwnd, &ps);
-                return 0;
-            }
-            
-            if (g_install.isComplete && !showOOBE) {
-                DrawInstallSlide(hdc, rect);
-                EndPaint(hwnd, &ps);
-                return 0;
-            }
-            
-            // ---- 2. 阳间版启动动画（有水母的，已配置时显示） ----
-            if (g_useSunlightLauncher && !g_sunlight.isFinished && showBootAnimation) {
-                DrawSunlightLauncher(hdc, rect);
-                EndPaint(hwnd, &ps);
-                return 0;
-            }
-            
-            // ---- 3. 原有绘制代码 ----
-            if (showGameEgg) {
-                DrawJellyfishGame(hdc, hwnd);
-                EndPaint(hwnd, &ps);
-                return 0;
-            }
-            
-            if (showFOSEgg) {
-                DrawFOSEgg(hdc, hwnd);
-                EndPaint(hwnd, &ps);
-                return 0;
-            }
-            
-            if (showFOSBeta) {
-                DrawFOSBetaAnimation(hdc, rect);
-            }
-            else if (showBootAnimation) {
-                DrawBootAnimation(hdc, rect);
-            }
-            else if (showShutdown) {
-                DrawShutdownAnimation(hdc, rect);
-            }
-            else if (showCDKeyScreen) {
-                DrawCDKeyInterface(hdc, centerX, centerY);
-            }
-            else if (showDesktop) {
-                DrawDesktop(hdc, rect);
-                DrawTaskbar(hdc, rect);
-                
-                if (showCalculator) {
-                    DrawCalculator(hdc, centerX, centerY);
-                }
-                if (showSystemInfo) {
-                    DrawSystemInfo(hdc, centerX, centerY);
-                }
-                if (showFileManager) {
-                    DrawFileManager(hdc, centerX, centerY);
-                }
-                if (showFileEditor) {
-                    DrawFileEditor(hdc, centerX, centerY);
-                }
-                if (showSettings) {
-                    DrawSettings(hdc, centerX, centerY);
-                }
-                if (showBugReporter) {
-                    DrawBugReporter(hdc, centerX, centerY);
-                }
-                if (showBugList) {
-                    DrawBugList(hdc, centerX, centerY);
-                }
-                if (showCalendar) {
-                    DrawCalendar(hdc, centerX, centerY);
-                }
-            } else {
-                DrawVistaBackground(hdc, rect);
-                
-                SetBkMode(hdc, TRANSPARENT);
-                SetTextColor(hdc, RGB(255, 255, 255));
-                
-                if (showWelcome) {
-                    HFONT hTitleFont = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-                    HFONT hNormalFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-                    
-                    HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-                    TextOut(hdc, centerX - 180, centerY - 100, "系统应急修复程序", 16);
-                    SelectObject(hdc, hNormalFont);
-                    TextOut(hdc, centerX - 180, centerY - 30, "我们检测到您的系统出现了问题", 28);
-                    TextOut(hdc, centerX - 180, centerY + 10, "我们进入了此修补程序", 20);
-                    TextOut(hdc, centerX - 180, centerY + 50, "你的文件将会保留，如果进度条卡住，请按空格键以推动进度条", 56);
-                    SelectObject(hdc, hOldFont);
-                    
-                    DrawVistaProgressBar(hdc, centerX - 200, centerY + 100, 400, 20, progressValue);
-                    
-                    DeleteObject(hTitleFont);
-                    DeleteObject(hNormalFont);
-                } 
-                else if (showSecondScreen) {
-                    HFONT hTitleFont = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-                    HFONT hNormalFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-                    
-                    HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-                    TextOut(hdc, centerX - 180, centerY - 120, "系统应急修复程序", 16);
-                    SelectObject(hdc, hNormalFont);
-                    TextOut(hdc, centerX - 180, centerY - 50, "请稍后...", 9);
-                    TextOut(hdc, centerX - 180, centerY, "正在初始化应急修复程序，如果进度条卡住，请按空格键以推动进度条", 62);
-                    TextOut(hdc, centerX - 180, centerY + 50, "正在启动: 修补程序", 18);
-                    SelectObject(hdc, hOldFont);
-                    
-                    DrawVistaProgressBar(hdc, centerX - 200, centerY + 100, 400, 20, progressValue);
-                    
-                    DeleteObject(hTitleFont);
-                    DeleteObject(hNormalFont);
-                } 
-                else if (showOOBE) {
-                    DrawOOBEInterface(hdc, centerX, centerY);
-                }
-                else if (showLogin) {
-                    DrawLoginInterface(hdc, centerX, centerY);
-                }
-                else if (showComplete) {
-                    HFONT hTitleFont = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-                    HFONT hNormalFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-                    
-                    HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-                    TextOut(hdc, centerX - 200, centerY - 120, "配置完成！", 10);
-                    SelectObject(hdc, hNormalFont);
-                    TextOut(hdc, centerX - 200, centerY - 50, "欢迎您，", 8);
-                    TextOut(hdc, centerX - 120, centerY - 50, username, strlen(username));
-                    TextOut(hdc, centerX - 200, centerY, "您的账户已成功创建", 18);
-                    TextOut(hdc, centerX - 200, centerY + 50, "请手动关闭程序", 14);
-                    SelectObject(hdc, hOldFont);
-                    
-                    DeleteObject(hTitleFont);
-                    DeleteObject(hNormalFont);
-                }
-            }
-            
-            EndPaint(hwnd, &ps);
-            break;
-        }
-        default:
-            return DefWindowProc(hwnd, Message, wParam, lParam);
-    }
-    return 0;
+	switch(Message) {
+		case WM_CREATE: {
+		DebugLog("========== WM_CREATE 开始 ==========");
+		DebugLog("系统启动时间: %d ms", GetTickCount());
+		
+		try {
+			DebugLog("加载配置...");
+			LoadConfig();
+			
+			DebugLog("初始化系统信息...");
+			InitializeSystemInfo();
+			
+			DebugLog("设置定时器...");
+			SetTimer(hwnd, 7, 1000, NULL);
+			
+			DebugLog("初始化IME...");
+			hIMC = ImmGetContext(hwnd);
+			if (hIMC) {
+				DWORD convMode, sentMode;
+				ImmGetConversionStatus(hIMC, &convMode, &sentMode);
+				convMode |= IME_CMODE_NATIVE;
+				ImmSetConversionStatus(hIMC, convMode, sentMode);
+				ImmReleaseContext(hwnd, hIMC);
+				DebugLog("IME初始化成功");
+			} else {
+				DebugLog("警告: IME初始化失败");
+			}
+			
+			DebugLog("加载日历事件...");
+			LoadCalendarEvents();
+			
+			// ---- 强制关闭所有界面 ----
+			showFOSBeta = FALSE;
+			showBootAnimation = FALSE;
+			showWelcome = FALSE;
+			showSecondScreen = FALSE;
+			showOOBE = FALSE;
+			showDesktop = FALSE;
+			showLogin = FALSE;
+			showShutdown = FALSE;
+			showCDKeyScreen = FALSE;
+			showInstall = FALSE;
+			
+			if (isFirstBoot) {
+				DebugLog("首次启动，显示CD-KEY验证界面");
+				ShowCDKeyScreen(hwnd);
+			} else {
+				DebugLog("系统已配置，启动阳间版启动动画（水母版）");
+				
+				ZeroMemory(&g_sunlight, sizeof(SunlightState));
+				g_sunlight.startTime = GetTickCount();
+				g_sunlight.lastFrameTime = g_sunlight.startTime;
+				g_sunlight.jellyX = 400;
+				g_sunlight.jellyY = 350;
+				g_sunlight.jellyAlpha = 0.0f;
+				g_sunlight.jellyScale = 0.7f;
+				g_sunlight.jellySpeed = 1.0f;
+				
+				time_t now = time(NULL);
+				tm* t = localtime(&now);
+				int m = t->tm_mon + 1, d = t->tm_mday, hh = t->tm_hour, min = t->tm_min;
+				
+				if (m == 9 && d == 2) {
+					g_sunlight.isBirthday = TRUE;
+					g_sunlight.isGoldMode = TRUE;
+					if (hh >= 14 && hh < 15) { g_sunlight.isBirthHour = TRUE; g_sunlight.isDoubleEgg = TRUE; }
+					if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
+				}
+				if (m == 1 && d == 1) {
+					g_sunlight.isSubmitDay = TRUE;
+					g_sunlight.isGoldMode = TRUE;
+					if (hh == 3 && min == 47) g_sunlight.isSoulHour = TRUE;
+				}
+				if (m == 5 && d == 20) {
+					g_sunlight.isLoveDay = TRUE;
+				}
+				if (hh == 3 && min == 47 && !g_sunlight.isBirthday && !g_sunlight.isSubmitDay) {
+					g_sunlight.isSoulHour = TRUE;
+				}
+				
+				if (g_sunlight.isLoveDay) {
+					g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "developer.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+					if (!g_sunlight.hPhoto) {
+						g_sunlight.hPhoto = (HBITMAP)LoadImageA(NULL, "photo.jpg", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+					}
+					g_sunlight.photoLoaded = (g_sunlight.hPhoto != NULL);
+				}
+				
+				const char* quotes[] = {
+					"今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+					"祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+					"你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+					"今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+					"代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+				};
+				int idx = rand() % 15;
+				strcpy(g_sunlight.quote, quotes[idx]);
+				g_sunlight.quoteChangeTime = g_sunlight.startTime;
+				
+				PlaySound(TEXT("startup.wav"), NULL, SND_ASYNC | SND_NODEFAULT);
+				g_sunlight.musicStarted = TRUE;
+				
+				showBootAnimation = TRUE;
+				showFOSBeta = FALSE;
+				
+				SetTimer(hwnd, 99, 40, NULL);
+				DebugLog("阳间版启动动画已初始化（水母版），刷新间隔40ms");
+			}
+			
+			DebugLog("WM_CREATE 处理完成");
+		}
+		catch (const std::exception& e) {
+			DebugLog("WM_CREATE异常: %s", e.what());
+			TriggerDebugPurpleScreen(hwnd, ERR_WINDOW_CREATE,
+									 "窗口创建初始化失败\n异常信息: %s", e.what());
+		}
+		catch (...) {
+			DebugLog("WM_CREATE未知异常");
+			TriggerDebugPurpleScreen(hwnd, ERR_WINDOW_CREATE,
+									 "窗口创建初始化发生未知异常");
+		}
+		
+		InvalidateRect(hwnd, NULL, TRUE);
+		break;
+	}
+		
+		case WM_SIZE: {
+			CreateBackgroundBitmap(hwnd);
+			break;
+		}
+		
+		case WM_TIMER: {
+			if (wParam == 98) {
+				if (g_install.isInstalling && !g_install.isComplete) {
+					UpdateInstallState();
+					if (g_install.isComplete) {
+						KillTimer(hwnd, 98);
+						OnInstallComplete(hwnd);
+					}
+					InvalidateRect(hwnd, NULL, FALSE);
+				}
+				break;
+			}
+			
+			if (wParam == 99) {
+				if (!g_sunlight.isFinished) {
+					InvalidateRect(hwnd, NULL, FALSE);
+				} else {
+					KillTimer(hwnd, 99);
+					DebugLog("阳间版启动动画完成，进入登录界面");
+					showBootAnimation = FALSE;
+					PlaySound(TEXT(""), NULL, SND_ASYNC | SND_NODEFAULT);
+					ShowLoginScreen(hwnd);
+				}
+				break;
+			}
+			
+			if (wParam == 7) {
+				if (showDesktop) {
+					InvalidateRect(hwnd, NULL, FALSE);
+				}
+				break;
+			}
+			
+			if (wParam == 3) {
+				progressValue = (progressValue + 2) % 100;
+				if (!showOOBE && !showComplete && !showDesktop && !showBootAnimation && 
+					!showLogin && !showCDKeyScreen && !showGameEgg && !showFileEditor && 
+					!showSettings && !showUSBError && !showBugReporter && !showBugList && 
+					!showCalendar && !g_install.isInstalling) {
+					InvalidateRect(hwnd, NULL, FALSE);
+				}
+			}
+			
+			if (wParam == 1) {
+				DebugLog("定时器1: 欢迎界面结束");
+				KillTimer(hwnd, 1);
+				clean(hwnd);
+				showSecondScreen = TRUE;
+				InvalidateRect(hwnd, NULL, TRUE);
+				SetTimer(hwnd, 2, 10000, NULL);
+			}
+			
+			if (wParam == 2) {
+				DebugLog("定时器2: 第二界面结束");
+				KillTimer(hwnd, 2);
+				cleanSecond(hwnd);
+			}
+			
+			if (wParam == 4) {
+				progressValue += 2;
+				if (progressValue >= 100) {
+					DebugLog("定时器4: 启动完成");
+					KillTimer(hwnd, 4);
+					progressValue = 100;
+					if (isFirstBoot) {
+						EndBootAnimation(hwnd);
+						SetTimer(hwnd, 1, 5000, NULL);
+						SetTimer(hwnd, 3, 100, NULL);
+					} else {
+						ShowLoginScreen(hwnd);
+					}
+				}
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			
+			if (wParam == 5) {
+				DebugLog("定时器5: OOBE完成，准备关机");
+				KillTimer(hwnd, 5);
+				ShowShutdownAnimation(hwnd);
+			}
+			
+			if (wParam == 6) {
+				shutdownProgress += 2;
+				if (shutdownProgress >= 100) {
+					DebugLog("定时器6: 关机完成");
+					KillTimer(hwnd, 6);
+					shutdownProgress = 100;
+					if (!ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCE, 0)) {
+						MessageBox(hwnd, "请按按键退出", "提示", MB_OK | MB_ICONINFORMATION);
+						PostQuitMessage(0);
+					}
+				}
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			
+			if (wParam == 8) {
+				fosProgressValue += 2;
+				if (fosProgressValue >= 100) {
+					DebugLog("定时器8: FOS启动完成");
+					KillTimer(hwnd, 8);
+					fosProgressValue = 100;
+					EndFOSBetaAnimation(hwnd);
+					SetTimer(hwnd, 4, 40, NULL);
+				}
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			
+			if (wParam == 9) {
+				UpdateJellyfishGame(hwnd);
+			}
+			
+			if (wParam == 12 && showPurpleScreen) {
+				purpleScreenProgress += 1;
+				if (purpleScreenProgress >= 100) {
+					purpleScreenProgress = 100;
+				}
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			break;
+		}
+		
+	case WM_IME_STARTCOMPOSITION:
+		isIMEComposing = TRUE;
+		break;
+		
+	case WM_IME_ENDCOMPOSITION:
+		isIMEComposing = FALSE;
+		break;
+		
+	case WM_IME_COMPOSITION:
+		if (lParam & GCS_RESULTSTR) {
+			HIMC hIMCTemp = ImmGetContext(hwnd);
+			if (hIMCTemp) {
+				LONG dwSize = ImmGetCompositionString(hIMCTemp, GCS_RESULTSTR, NULL, 0);
+				if (dwSize > 0) {
+					char* lpStr = new char[dwSize + 1];
+					ImmGetCompositionString(hIMCTemp, GCS_RESULTSTR, lpStr, dwSize);
+					lpStr[dwSize] = '\0';
+					
+					if (showFileManager) {
+						if (strlen(commandInput) + dwSize < 99) {
+							strcat(commandInput, lpStr);
+						} else {
+							TriggerDebugPurpleScreen(hwnd, ERR_STRING_OVERFLOW,
+													 "命令输入缓冲区溢出\n当前长度: %d\n尝试添加: %d 字节",
+													 strlen(commandInput), dwSize);
+						}
+					}
+					else if (showFileEditor && isEditing) {
+						int fileLen = strlen(fileContent);
+						if (fileLen + dwSize < 9999) {
+							for (int i = fileLen; i >= cursorPosition; i--) {
+								fileContent[i + dwSize] = fileContent[i];
+							}
+							strncpy(&fileContent[cursorPosition], lpStr, dwSize);
+							cursorPosition += dwSize;
+						} else {
+							TriggerDebugPurpleScreen(hwnd, ERR_BUFFER_OVERFLOW,
+													 "文件内容缓冲区溢出\n当前大小: %d\n最大限制: 9999 字节",
+													 fileLen + dwSize);
+						}
+					}
+					else if (showCalculator && showSpecialMessage) {
+						if (strlen(guessInput) + dwSize < 49) {
+							strcat(guessInput, lpStr);
+						}
+					}
+					else if (showOOBE) {
+						if (currentStep == 1) {
+							if (strlen(username) + dwSize < 49) {
+								strcat(username, lpStr);
+							}
+						}
+						else if (currentStep == 2) {
+							if (strlen(password) + dwSize < 49) {
+								strcat(password, lpStr);
+							}
+						}
+						else if (currentStep == 3) {
+							if (strlen(computerName) + dwSize < 49) {
+								strcat(computerName, lpStr);
+							}
+						}
+					}
+					else if (showLogin) {
+						if (currentStep == 0) {
+							if (strlen(loginUsername) + dwSize < 49) {
+								strcat(loginUsername, lpStr);
+							}
+						}
+						else if (currentStep == 1) {
+							if (strlen(loginPassword) + dwSize < 49) {
+								strcat(loginPassword, lpStr);
+							}
+						}
+					}
+					else if (showSettings) {
+						if (settingsCurrentStep == 0) {
+							if (settingsFocusField == 0) {
+								if (strlen(newUsername) + dwSize < 49) {
+									strcat(newUsername, lpStr);
+								}
+							}
+							else if (settingsFocusField == 1) {
+								if (strlen(newPassword) + dwSize < 49) {
+									strcat(newPassword, lpStr);
+								}
+							}
+							else if (settingsFocusField == 2) {
+								if (strlen(newConfirmPassword) + dwSize < 49) {
+									strcat(newConfirmPassword, lpStr);
+								}
+							}
+						}
+						else if (settingsCurrentStep == 1) {
+							if (strlen(newComputerName) + dwSize < 49) {
+								strcat(newComputerName, lpStr);
+							}
+						}
+					}
+					else if (showCalendar && showEventDialog) {
+						if (strlen(eventText) + dwSize < 199) {
+							strcat(eventText, lpStr);
+						}
+					}
+					
+					delete[] lpStr;
+				}
+				ImmReleaseContext(hwnd, hIMCTemp);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+		}
+		break;
+		
+		case WM_CHAR: {
+			if (g_install.isInstalling && !g_install.isComplete) {
+				char key = (char)wParam;
+				HandleInstallInput(key, hwnd);
+				InvalidateRect(hwnd, NULL, FALSE);
+				return 0;
+			}
+			
+			if (showGameEgg) {
+				HandleJellyfishGameInput(wParam, hwnd);
+				InvalidateRect(hwnd, NULL, TRUE);
+				return 0;
+			}
+			
+			if (showFOSEgg) {
+				if (fosEggState == 5) {
+					if (wParam == 27) {
+						DebugLog("退出水母求饶彩蛋");
+						showFOSEgg = FALSE;
+						showFileManager = TRUE;
+						fosInputCount = 0;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+				}
+				return 0;
+			}
+			
+			if (showPurpleScreen) {
+				HandlePurpleScreenInput((char)wParam, hwnd);
+				InvalidateRect(hwnd, NULL, TRUE);
+				return 0;
+			}
+			
+			if (showCDKeyScreen) {
+				HandleCDKeyInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showOOBE) {
+				HandleOOBEInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showLogin) {
+				HandleLoginInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showCalculator) {
+				HandleCalculatorInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showFileManager) {
+				HandleFileManagerInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showFileEditor) {
+				HandleFileEditorInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showSettings) {
+				HandleSettingsInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showBugReporter) {
+				HandleBugReporterInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showBugList) {
+				HandleBugListInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			else if (showCalendar) {
+				HandleCalendarInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}else if (showClock) {
+				HandleClockInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+			break;
+		}
+		
+		case WM_KEYDOWN: {
+			if (g_install.isInstalling && !g_install.isComplete) {
+				char key = (char)wParam;
+				if (key == VK_SPACE || key == VK_RETURN || key == VK_ESCAPE) {
+					HandleInstallInput(key, hwnd);
+					InvalidateRect(hwnd, NULL, FALSE);
+					return 0;
+				}
+				return 0;
+			}
+			
+			CheckGameActivation(wParam, hwnd);
+			
+			if (g_useSunlightLauncher && !g_sunlight.isFinished) {
+				char key = (char)wParam;
+				BOOL ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+				
+				if (g_sunlight.showLovePhoto) {
+					if (key == VK_ESCAPE) {
+						g_sunlight.showLovePhoto = FALSE;
+						g_sunlight.showLoveQuestion = TRUE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					return 0;
+				}
+				
+				if (g_sunlight.showLoveQuestion) {
+					if (key == VK_ESCAPE) {
+						g_sunlight.showLoveQuestion = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					if (key == VK_RETURN) {
+						if (_stricmp(g_sunlight.loveInput, "yes") == 0) {
+							g_sunlight.loveAnswerYes = TRUE;
+							g_sunlight.loveAnswered = TRUE;
+							g_sunlight.showLoveQuestion = FALSE;
+							g_sunlight.showLovePhoto = TRUE;
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						} else if (_stricmp(g_sunlight.loveInput, "no") == 0) {
+							g_sunlight.loveAnswerYes = FALSE;
+							g_sunlight.loveAnswered = TRUE;
+							g_sunlight.showLoveQuestion = FALSE;
+							strcpy(g_sunlight.eggMsg, "好吧，水母有点伤心...");
+							g_sunlight.showEggMsg = TRUE;
+							g_sunlight.eggMsgTime = GetTickCount();
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+						return 0;
+					}
+					if (key == VK_BACK) {
+						if (g_sunlight.loveInputPos > 0) {
+							g_sunlight.loveInputPos--;
+							g_sunlight.loveInput[g_sunlight.loveInputPos] = '\0';
+							InvalidateRect(hwnd, NULL, TRUE);
+						}
+						return 0;
+					}
+					if (isalpha(key) && g_sunlight.loveInputPos < 19) {
+						g_sunlight.loveInput[g_sunlight.loveInputPos++] = tolower(key);
+						g_sunlight.loveInput[g_sunlight.loveInputPos] = '\0';
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					return 0;
+				}
+				
+				if (ctrl && (key == 'J' || key == 'j')) {
+					if (!g_sunlight.isBouncing) {
+						g_sunlight.isBouncing = TRUE;
+						g_sunlight.bounceStartY = g_sunlight.jellyY;
+						g_sunlight.bounceStartTime = GetTickCount();
+						g_sunlight.eggMsgTime = GetTickCount();
+						strcpy(g_sunlight.eggMsg, "水母弹跳！");
+						g_sunlight.showEggMsg = TRUE;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					return 0;
+				}
+				
+				if (ctrl && (key == 'C' || key == 'c')) {
+					g_sunlight.eggMsgTime = GetTickCount();
+					strcpy(g_sunlight.eggMsg, "彩蛋系统已加载");
+					g_sunlight.showEggMsg = TRUE;
+					g_sunlight.eggTriggerCount++;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				if (ctrl && key == '?') {
+					g_sunlight.eggMsgTime = GetTickCount();
+					strcpy(g_sunlight.eggMsg, "你终于问了");
+					g_sunlight.showEggMsg = TRUE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				if (ctrl && key == VK_ESCAPE) {
+					g_sunlight.eggMsgTime = GetTickCount();
+					strcpy(g_sunlight.eggMsg, "别走，系统在等你");
+					g_sunlight.showEggMsg = TRUE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				if (!ctrl && g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
+					g_sunlight.isLoading = TRUE;
+					g_sunlight.loadProgress = 0;
+					g_sunlight.loadTextIndex = 0;
+					g_sunlight.loadTextChangeTime = GetTickCount();
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				return 0;
+			}
+			
+			if (showGameEgg) {
+				HandleJellyfishGameInput(wParam, hwnd);
+				return 0;
+			}
+			
+			if (showPurpleScreen) {
+				if ((wParam == 'E' || wParam == 'e') && 
+					GetAsyncKeyState(VK_CONTROL) && 
+					GetAsyncKeyState(VK_MENU)) {
+					DebugLog("紫屏中触发重启 (Ctrl+Alt+E)");
+					ShowShutdownAnimation(hwnd);
+					showPurpleScreen = FALSE;
+					purpleScreenLocked = FALSE;
+					return 0;
+				}
+				if ((wParam == 'D' || wParam == 'd') && GetAsyncKeyState(VK_CONTROL)) {
+					HandlePurpleScreenInput('D', hwnd);
+					return 0;
+				}
+			}
+			
+			if (showFOSEgg) {
+				if (wParam == VK_ESCAPE) {
+					DebugLog("跳过FOS彩蛋");
+					showFOSEgg = FALSE;
+					showFileManager = TRUE;
+					fosInputCount = 0;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				else if (wParam == VK_RETURN) {
+					if (fosEggState == 5) {
+						showFOSEgg = FALSE;
+						showFileManager = TRUE;
+						fosInputCount = 0;
+					} else {
+						switch (fosEggState) {
+							case 1: {
+							dialogueIndexx++;
+							if (dialogueIndexx >= 4) {
+								fosEggState = 2;
+								dialogueIndexx = 0;
+								currentDevStage = 0;
+							}
+							break;
+						}
+							case 2: {
+								currentDevStage++;
+								if (currentDevStage >= 8) {
+									fosEggState = 3;
+									currentDevStage = 0;
+								}
+								break;
+							}
+							case 3: {
+								currentDevStage++;
+								if (currentDevStage >= 6) {
+									fosEggState = 4;
+									currentDevStage = 0;
+								}
+								break;
+							}
+							case 4: {
+								showFOSEgg = FALSE;
+								showFileManager = TRUE;
+								fosInputCount = 0;
+								break;
+							}
+						}
+					}
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				return 0;
+			}
+			
+			if (showFileEditor) {
+				HandleFileEditorSpecialKeys(wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+				return 0;
+			}
+			
+			if (showBugList) {
+				HandleBugListInput((char)wParam);
+				InvalidateRect(hwnd, NULL, TRUE);
+				return 0;
+			}
+			
+			if (showOOBE) {
+				if (wParam == VK_TAB) {
+					switch (currentStep) {
+						case 1: currentStep = 2; break;
+						case 2: currentStep = 3; break;
+						case 3: currentStep = 3; break;
+					}
+					InvalidateRect(hwnd, NULL, TRUE);
+				}
+			}
+			else if (showLogin) {
+				if (wParam == VK_TAB && currentStep == 0) {
+					currentStep = 1;
+					InvalidateRect(hwnd, NULL, TRUE);
+				}
+			}
+			else if (showDesktop) {
+				if (wParam == VK_F1) {
+					DebugLog("快捷键F1: 打开计算器");
+					ShowCalculator(hwnd);
+				}
+				else if (wParam == VK_F2) {
+					DebugLog("快捷键F2: 打开系统信息");
+					ShowSystemInfo(hwnd);
+				}
+				else if (wParam == VK_F3) {
+					DebugLog("快捷键F3: 打开文件管理器");
+					ShowFileManager(hwnd);
+				}
+				else if (wParam == VK_F4 && isActivated) {
+					DebugLog("快捷键F4: 打开设置");
+					ShowSettings(hwnd);
+				}
+				else if (wParam == VK_F5) {
+					DebugLog("快捷键F5: 打开Bug报告");
+					ShowBugReporter(hwnd);
+				}
+				else if (wParam == VK_F6 && isActivated) {
+					DebugLog("快捷键F6: 打开Bug列表");
+					ShowBugList(hwnd);
+				}
+				else if (wParam == VK_F7) {
+					DebugLog("快捷键F7: 打开日历");
+					ShowCalendar(hwnd);
+				}
+			}
+			break;
+		}
+		
+		case WM_LBUTTONDOWN: {
+			int x = LOWORD(lParam);
+			int y = HIWORD(lParam);
+			
+			if (g_install.isInstalling && !g_install.isComplete) {
+				if (g_install.isPaused) {
+					g_install.isPaused = FALSE;
+					g_install.slideStartTime = GetTickCount();
+					InvalidateRect(hwnd, NULL, FALSE);
+				} else {
+					HandleInstallInput(VK_RETURN, hwnd);
+				}
+				return 0;
+			}
+			
+			DebugLog("鼠标点击: (%d, %d)", x, y);
+			
+			if (g_useSunlightLauncher && !g_sunlight.isFinished) {
+				RECT rect;
+				GetClientRect(hwnd, &rect);
+				int cx = (rect.left + rect.right) / 2;
+				int cy = (rect.top + rect.bottom) / 2;
+				
+				if (g_sunlight.showLovePhoto || g_sunlight.showLoveQuestion) {
+					return 0;
+				}
+				
+				if (x > cx - 200 && x < cx + 200 && y > cy - 80 && y < cy + 30) {
+					g_sunlight.eggMsgTime = GetTickCount();
+					strcpy(g_sunlight.eggMsg, "JELLYFISH STUDIO");
+					g_sunlight.showEggMsg = TRUE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				int jx = (int)g_sunlight.jellyX;
+				int jy = (int)g_sunlight.jellyY;
+				if (g_sunlight.isBirthday && !g_sunlight.hasEntered && g_sunlight.entryX > -50) {
+					jx = (int)g_sunlight.entryX;
+					jy = (int)g_sunlight.entryY;
+				}
+				if (x > jx - 70 && x < jx + 70 && y > jy - 60 && y < jy + 60) {
+					if (g_sunlight.isLoveDay) {
+						g_sunlight.showLoveQuestion = TRUE;
+						g_sunlight.loveInput[0] = '\0';
+						g_sunlight.loveInputPos = 0;
+						g_sunlight.loveAnswered = FALSE;
+						g_sunlight.loveAnswerYes = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					} else {
+						g_sunlight.eggMsgTime = GetTickCount();
+						strcpy(g_sunlight.eggMsg, "水母说：你好！");
+						g_sunlight.showEggMsg = TRUE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+				}
+				
+				if (x > cx - 300 && x < cx + 300 && y > cy + 90 && y < cy + 120) {
+					const char* quotes[] = {
+						"今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+						"祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+						"你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+						"今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+						"代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+					};
+					int idx = rand() % 15;
+					strcpy(g_sunlight.quote, quotes[idx]);
+					g_sunlight.quoteChangeTime = GetTickCount();
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				if (x > 20 && x < 200 && y > rect.bottom - 40 && y < rect.bottom - 10) {
+					g_sunlight.eggMsgTime = GetTickCount();
+					strcpy(g_sunlight.eggMsg, "JammyJellyfish");
+					g_sunlight.showEggMsg = TRUE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				static DWORD lastClick = 0;
+				static int clickCount = 0;
+				if (y > rect.bottom - 60 && y < rect.bottom - 10) {
+					DWORD now = GetTickCount();
+					if (now - lastClick < 500) {
+						clickCount++;
+						if (clickCount >= 2) {
+							g_sunlight.eggMsgTime = GetTickCount();
+							strcpy(g_sunlight.eggMsg, "你是开发人员吗？");
+							g_sunlight.showEggMsg = TRUE;
+							clickCount = 0;
+							InvalidateRect(hwnd, NULL, TRUE);
+						}
+					} else {
+						clickCount = 1;
+					}
+					lastClick = now;
+					return 0;
+				}
+				
+				if (g_sunlight.progress >= 0.6f && !g_sunlight.isLoading && !g_sunlight.isFinished) {
+					g_sunlight.isLoading = TRUE;
+					g_sunlight.loadProgress = 0;
+					g_sunlight.loadTextIndex = 0;
+					g_sunlight.loadTextChangeTime = GetTickCount();
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				return 0;
+			}
+			
+			if (showGameEgg) {
+				return 0;
+			}
+			
+			if (showClock) {
+				RECT clientRect;
+				GetClientRect(hwnd, &clientRect);
+				int centerX = clientRect.right / 2;
+				int centerY = clientRect.bottom / 2;
+				HandleClockMouseClick(x, y, centerX, centerY);
+				return 0;
+			}
+			
+			if (showFOSEgg && fosEggState == 5) {
+				RECT rect;
+				GetClientRect(hwnd, &rect);
+				int centerX = rect.right / 2;
+				
+				if (x >= centerX - 100 && x <= centerX + 100 && y >= rect.bottom - 60) {
+					DebugLog("点击ESC提示区域，退出水母求饶");
+					showFOSEgg = FALSE;
+					showFileManager = TRUE;
+					fosInputCount = 0;
+					InvalidateRect(hwnd, NULL, TRUE);
+				}
+				return 0;
+			}
+			
+			if (showBugList) {
+				AppRect bugListRect = GetAppRect(hwnd, 8);
+				int relX = x - bugListRect.left;
+				int relY = y - bugListRect.top;
+				
+				RECT listRect = {bugListRect.left + 20, bugListRect.top + 50, 
+					bugListRect.right - 20, bugListRect.bottom - 80};
+				if (relX >= 20 && relX <= (bugListRect.right - bugListRect.left - 20) &&
+					relY >= 50 && relY <= (bugListRect.bottom - bugListRect.top - 80)) {
+					
+					int itemHeight = 25;
+					int startY = 90;
+					int clickIndex = (relY - startY) / itemHeight + bugListScroll;
+					
+					if (clickIndex >= 0 && clickIndex < bugListCount) {
+						selectedBugIndex = clickIndex;
+						DebugLog("选中Bug索引: %d", clickIndex);
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					
+					int col1 = 30;
+					if (relX >= col1 && relX <= col1 + 15 && 
+						relY >= startY + clickIndex * itemHeight + 5 && 
+						relY <= startY + clickIndex * itemHeight + 20) {
+						if (clickIndex >= 0 && clickIndex < bugListCount) {
+							ToggleBugFixedStatus(clickIndex);
+							DebugLog("切换Bug修复状态: %d", clickIndex);
+							InvalidateRect(hwnd, NULL, TRUE);
+						}
+					}
+					return 0;
+				}
+				
+				int buttonWidth = 100;
+				int buttonHeight = 35;
+				int buttonY = bugListRect.bottom - 60;
+				int centerX = (bugListRect.right - bugListRect.left) / 2;
+				int buttonSpacing = 120;
+				
+				RECT toggleButtonRect = {centerX - buttonSpacing * 2, buttonY, 
+					centerX - buttonSpacing * 2 + buttonWidth, buttonY + buttonHeight};
+				if (relX >= centerX - buttonSpacing * 2 && relX <= centerX - buttonSpacing * 2 + buttonWidth &&
+					relY >= buttonY && relY <= buttonY + buttonHeight && selectedBugIndex >= 0) {
+					ToggleBugFixedStatus(selectedBugIndex);
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT deleteButtonRect = {centerX - buttonSpacing, buttonY, 
+					centerX - buttonSpacing + buttonWidth, buttonY + buttonHeight};
+				if (relX >= centerX - buttonSpacing && relX <= centerX - buttonSpacing + buttonWidth &&
+					relY >= buttonY && relY <= buttonY + buttonHeight && selectedBugIndex >= 0) {
+					DeleteBug(selectedBugIndex);
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT refreshButtonRect = {centerX, buttonY, centerX + buttonWidth, buttonY + buttonHeight};
+				if (relX >= centerX && relX <= centerX + buttonWidth &&
+					relY >= buttonY && relY <= buttonY + buttonHeight) {
+					LoadBugListFromFile();
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT closeButtonRect = {centerX + buttonSpacing, buttonY, 
+					centerX + buttonSpacing + buttonWidth, buttonY + buttonHeight};
+				if (relX >= centerX + buttonSpacing && relX <= centerX + buttonSpacing + buttonWidth &&
+					relY >= buttonY && relY <= buttonY + buttonHeight) {
+					showBugList = FALSE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				return 0;
+			}
+			
+			if (showBugReporter) {
+				AppRect bugRect = GetAppRect(hwnd, 7);
+				int relX = x - bugRect.left;
+				int relY = y - bugRect.top;
+				
+				if (bugSubmitted) {
+					RECT closeButtonRect = {bugRect.left + 340, bugRect.top + 350, 
+						bugRect.left + 460, bugRect.top + 390};
+					if (relX >= 340 && relX <= 460 && relY >= 350 && relY <= 390) {
+						showBugReporter = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					return 0;
+				}
+				
+				RECT categoryRect = {bugRect.left + 120, bugRect.top + 95, 
+					bugRect.left + 370, bugRect.top + 125};
+				if (relX >= 120 && relX <= 370 && relY >= 95 && relY <= 125) {
+					int categoryWidth = 250 / 5;
+					int selectedCategory = (relX - 120) / categoryWidth;
+					bugCategory = selectedCategory;
+					DebugLog("选择Bug分类: %d", selectedCategory);
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT severityRect = {bugRect.left + 120, bugRect.top + 135, 
+					bugRect.left + 370, bugRect.top + 165};
+				if (relX >= 120 && relX <= 370 && relY >= 135 && relY <= 165) {
+					int severityWidth = 250 / 4;
+					int selectedSeverity = (relX - 120) / severityWidth + 1;
+					bugSeverity = selectedSeverity;
+					DebugLog("选择严重程度: %d", selectedSeverity);
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT titleInputRect = {bugRect.left + 120, bugRect.top + 55, 
+					bugRect.right - 20, bugRect.top + 85};
+				if (relX >= 120 && relX <= (bugRect.right - bugRect.left - 20) && 
+					relY >= 55 && relY <= 85) {
+					currentField = 0;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT descInputRect = {bugRect.left + 20, bugRect.top + 205, 
+					bugRect.right - 20, bugRect.top + 350};
+				if (relX >= 20 && relX <= (bugRect.right - bugRect.left - 20) && 
+					relY >= 205 && relY <= 350) {
+					currentField = 1;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT submitButtonRect = {bugRect.left + 280, bugRect.top + 550, 
+					bugRect.left + 380, bugRect.top + 585};
+				if (relX >= 280 && relX <= 380 && relY >= 550 && relY <= 585) {
+					SubmitBugReport();
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT cancelButtonRect = {bugRect.left + 420, bugRect.top + 550, 
+					bugRect.left + 520, bugRect.top + 585};
+				if (relX >= 420 && relX <= 520 && relY >= 550 && relY <= 585) {
+					showBugReporter = FALSE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				return 0;
+			}
+			
+			if (showOOBE) {
+				RECT clientRect;
+				GetClientRect(hwnd, &clientRect);
+				int centerX = clientRect.right / 2;
+				int centerY = clientRect.bottom / 2;
+				
+				switch (currentStep) {
+					case 0: {
+					RECT buttonRect = {centerX - 80, centerY + 80, centerX + 80, centerY + 120};
+					if (x >= buttonRect.left && x <= buttonRect.right &&
+						y >= buttonRect.top && y <= buttonRect.bottom) {
+						DebugLog("OOBE: 点击开始设置");
+						currentStep = 1;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					break;
+				}
+					case 2: {
+						RECT skipButtonRect = {centerX - 200, centerY + 20, centerX + 200, centerY + 60};
+						if (x >= skipButtonRect.left && x <= skipButtonRect.right &&
+							y >= skipButtonRect.top && y <= skipButtonRect.bottom) {
+							DebugLog("OOBE: 跳过密码设置");
+							skipPasswordSetup = TRUE;
+							currentStep = 3;
+							InvalidateRect(hwnd, NULL, TRUE);
+						}
+						break;
+					}
+					case 3: {
+						int themeWidth = 400 / 4;
+						int themeStartX = centerX - 200;
+						int themeStartY = centerY - 10;
+						
+						for (int i = 0; i < 4; i++) {
+							int themeX = themeStartX + i * themeWidth;
+							if (x >= themeX && x <= themeX + themeWidth &&
+								y >= themeStartY && y <= themeStartY + 80) {
+								currentThemeIndex = i;
+								DebugLog("OOBE: 选择主题 %d", i);
+								InvalidateRect(hwnd, NULL, TRUE);
+								break;
+							}
+						}
+						
+						RECT completeButtonRect = {centerX - 80, centerY + 130, centerX + 80, centerY + 170};
+						if (x >= completeButtonRect.left && x <= completeButtonRect.right &&
+							y >= completeButtonRect.top && y <= completeButtonRect.bottom) {
+							if (ValidateOOBEInput()) {
+								DebugLog("OOBE: 完成配置");
+								CompleteOOBE(hwnd);
+							}
+						}
+						break;
+					}
+				}
+				return 0;
+			}
+			
+			if (showSettings) {
+				AppRect settingsRect = GetAppRect(hwnd, 6);
+				int relX = x - settingsRect.left;
+				int relY = y - settingsRect.top;
+				
+				if (settingsCurrentStep == 2) {
+					int themeWidth = 400 / 4;
+					int themeStartX = settingsRect.left + 50;
+					int themeStartY = settingsRect.top + 220;
+					
+					for (int i = 0; i < 4; i++) {
+						int themeX = themeStartX + i * themeWidth;
+						if (relX >= themeX && relX <= themeX + themeWidth &&
+							relY >= themeStartY && relY <= themeStartY + 120) {
+							currentThemeIndex = i;
+							DebugLog("设置: 选择主题 %d", i);
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+					}
+				}
+				
+				int buttonWidth = 100;
+				int buttonHeight = 35;
+				int buttonY = settingsRect.top + 480;
+				
+				if (settingsCurrentStep > 0) {
+					RECT prevButtonRect = {settingsRect.left + 130, buttonY, 
+						settingsRect.left + 130 + buttonWidth, buttonY + buttonHeight};
+					if (relX >= 130 && relX <= 130 + buttonWidth && relY >= 480 && relY <= 480 + buttonHeight) {
+						settingsCurrentStep--;
+						DebugLog("设置: 上一步");
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+				}
+				
+				RECT nextButtonRect = {settingsRect.left + 250, buttonY, 
+					settingsRect.left + 250 + buttonWidth, buttonY + buttonHeight};
+				if (relX >= 250 && relX <= 250 + buttonWidth && relY >= 480 && relY <= 480 + buttonHeight) {
+					if (ValidateSettingsInput()) {
+						if (settingsCurrentStep < 2) {
+							settingsCurrentStep++;
+							DebugLog("设置: 下一步");
+						} else {
+							DebugLog("设置: 应用设置");
+							ApplySettings();
+							showSettings = FALSE;
+						}
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					return 0;
+				}
+				
+				RECT cancelButtonRect = {settingsRect.left + 370, buttonY, 
+					settingsRect.left + 370 + buttonWidth, buttonY + buttonHeight};
+				if (relX >= 370 && relX <= 370 + buttonWidth && relY >= 480 && relY <= 480 + buttonHeight) {
+					DebugLog("设置: 取消");
+					showSettings = FALSE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				return 0;
+			}
+			
+			if (showFileEditor) {
+				AppRect editorRect = GetAppRect(hwnd, 5);
+				int relX = x - editorRect.left;
+				int relY = y - editorRect.top;
+				
+				RECT saveButton = {editorRect.left + 10, editorRect.top + 35, 
+					editorRect.left + 60, editorRect.top + 55};
+				if (relX >= 10 && relX <= 60 && relY >= 35 && relY <= 55) {
+					DebugLog("编辑器: 保存文件");
+					SaveFileContent();
+					return 0;
+				}
+				
+				RECT exitButton = {editorRect.left + 70, editorRect.top + 35, 
+					editorRect.left + 120, editorRect.top + 55};
+				if (relX >= 70 && relX <= 120 && relY >= 35 && relY <= 55) {
+					DebugLog("编辑器: 退出");
+					showFileEditor = FALSE;
+					showFileManager = TRUE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT formatButton = {editorRect.left + 130, editorRect.top + 35, 
+					editorRect.left + 200, editorRect.top + 55};
+				if (relX >= 130 && relX <= 200 && relY >= 35 && relY <= 55) {
+					textFormat = (textFormat + 1) % 4;
+					DebugLog("编辑器: 切换格式 %d", textFormat);
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				
+				RECT editRect = {editorRect.left + 10, editorRect.top + 70, 
+					editorRect.right - 10, editorRect.bottom - 10};
+				if (relX >= 10 && relX <= (editorRect.right - editorRect.left - 10) &&
+					relY >= 70 && relY <= (editorRect.bottom - editorRect.top - 10)) {
+					isEditing = TRUE;
+					cursorPosition = strlen(fileContent);
+					InvalidateRect(hwnd, NULL, TRUE);
+				}
+				return 0;
+			}
+			
+			if (showDesktop) {
+				// ---- 状态栏鼠标处理 ----
+				if (y <= STATUSBAR_HEIGHT) {
+					// 检查是否点击了开始按钮
+					if (x >= 4 && x <= 84) {
+						ToggleStartMenu();
+						return 0;
+					}
+					
+					// 检查是否点击了日期时间
+					RECT rect;
+					GetClientRect(hwnd, &rect);
+					int timeX = rect.right - 130;
+					if (x >= timeX) {
+						ShowCalendar(hwnd);
+						return 0;
+					}
+					
+					// 检查是否点击了通知图标
+					int iconStartX = 94;
+					int iconSize = STATUSBAR_ICON_SIZE;
+					int spacing = STATUSBAR_ICON_SPACING;
+					int notifyX = iconStartX + (iconSize + spacing) * 4;
+					if (x >= notifyX && x <= notifyX + iconSize) {
+						showNotifications = !showNotifications;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 点击状态栏其他区域，关闭开始菜单
+					if (showStartMenu) {
+						CloseStartMenu();
+					}
+					return 0;
+				}
+				
+				// ---- 开始菜单点击处理 ----
+				if (showStartMenu) {
+					int menuX = 0;
+					int menuY = STATUSBAR_HEIGHT + STARTMENU_PADDING;
+					int itemWidth = STARTMENU_WIDTH - STARTMENU_PADDING * 2;
+					int itemHeight = STARTMENU_ITEM_HEIGHT;
+					
+					int relX = x - menuX - STARTMENU_PADDING;
+					int relY = y - menuY;
+					
+					if (relX >= 0 && relX <= itemWidth && relY >= 0) {
+						int itemIndex = relY / itemHeight;
+						if (itemIndex < STARTMENU_ITEM_COUNT) {
+							const StartMenuItem* item = &startMenuItems[itemIndex];
+							if (!item->isSeparator) {
+								ExecuteStartMenuItem(item->command);
+								CloseStartMenu();
+								return 0;
+							}
+						}
+					}
+					
+					// 点击菜单外部，关闭菜单
+					CloseStartMenu();
+					return 0;
+				}
+				
+				// ---- 原有桌面按钮处理 ----
+				int buttonWidth = 100;
+				int buttonHeight = 40;
+				int buttonY = 10;
+				int buttonStartX = 200;
+				int buttonSpacing = 110;
+				int buttonIndex = 0;
+				
+				int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
+				if (x >= desktopRect.left && x <= desktopRect.right &&
+					y >= desktopRect.top && y <= desktopRect.bottom) {
+					isDesktopPressed = TRUE;
+					InvalidateRect(hwnd, &desktopRect, TRUE);
+					return 0;
+				}
+				
+				int fileX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
+				if (x >= fileRect.left && x <= fileRect.right &&
+					y >= fileRect.top && y <= fileRect.bottom) {
+					isFileManagerPressed = TRUE;
+					InvalidateRect(hwnd, &fileRect, TRUE);
+					return 0;
+				}
+				
+				int calcX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
+				if (x >= calcRect.left && x <= calcRect.right &&
+					y >= calcRect.top && y <= calcRect.bottom) {
+					isCalcPressed = TRUE;
+					InvalidateRect(hwnd, &calcRect, TRUE);
+					return 0;
+				}
+				
+				int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
+				if (x >= sysinfoRect.left && x <= sysinfoRect.right &&
+					y >= sysinfoRect.top && y <= sysinfoRect.bottom) {
+					isSysInfoPressed = TRUE;
+					InvalidateRect(hwnd, &sysinfoRect, TRUE);
+					return 0;
+				}
+				
+				if (isActivated) {
+					int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
+					if (x >= settingsRect.left && x <= settingsRect.right &&
+						y >= settingsRect.top && y <= settingsRect.bottom) {
+						isSettingsPressed = TRUE;
+						InvalidateRect(hwnd, &settingsRect, TRUE);
+						return 0;
+					}
+				}
+				
+				if (showGameButton) {
+					int gameX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
+					if (x >= gameRect.left && x <= gameRect.right &&
+						y >= gameRect.top && y <= gameRect.bottom) {
+						isGamePressed = TRUE;
+						InvalidateRect(hwnd, &gameRect, TRUE);
+						return 0;
+					}
+				}
+				
+				if (isActivated) {
+					int bugX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
+					if (x >= bugRect.left && x <= bugRect.right &&
+						y >= bugRect.top && y <= bugRect.bottom) {
+						isBugPressed = TRUE;
+						InvalidateRect(hwnd, &bugRect, TRUE);
+						return 0;
+					}
+					
+					int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
+					if (x >= bugListRect.left && x <= bugListRect.right &&
+						y >= bugListRect.top && y <= bugListRect.bottom) {
+						isBugListPressed = TRUE;
+						InvalidateRect(hwnd, &bugListRect, TRUE);
+						return 0;
+					}
+				}
+				
+				int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
+				if (x >= calendarRect.left && x <= calendarRect.right &&
+					y >= calendarRect.top && y <= calendarRect.bottom) {
+					isCalendarPressed = TRUE;
+					InvalidateRect(hwnd, &calendarRect, TRUE);
+					return 0;
+				}
+				
+				int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
+				if (x >= shutdownRect.left && x <= shutdownRect.right &&
+					y >= shutdownRect.top && y <= shutdownRect.bottom) {
+					isShutdownPressed = TRUE;
+					InvalidateRect(hwnd, &shutdownRect, TRUE);
+					return 0;
+				}
+			}
+			else if (showCDKeyScreen) {
+				int centerX = GetSystemMetrics(SM_CXSCREEN) / 2;
+				int centerY = GetSystemMetrics(SM_CYSCREEN) / 2;
+				int buttonY = centerY + 180;
+				int buttonWidth = 120;
+				int buttonHeight = 40;
+				
+				if (x >= centerX - 270 && x <= centerX - 270 + buttonWidth && 
+					y >= buttonY && y <= buttonY + buttonHeight) {
+					DebugLog("CDKEY: 点击激活");
+					HandleCDKeyInput(13);
+				}
+				else if (x >= centerX - 130 && x <= centerX - 130 + buttonWidth && 
+						 y >= buttonY && y <= buttonY + buttonHeight) {
+					DebugLog("CDKEY: 点击试用");
+					StartTrialMode(hwnd);
+				}
+				else if (x >= centerX + 10 && x <= centerX + 10 + buttonWidth && 
+						 y >= buttonY && y <= buttonY + buttonHeight) {
+					DebugLog("CDKEY: 点击退出");
+					PostQuitMessage(0);
+				}
+			}
+			else if (showCalculator && !showGameEgg) {
+				AppRect calcRect = GetAppRect(hwnd, 1);
+				int relX = x - calcRect.left;
+				int relY = y - calcRect.top;
+				
+				if (showFinalEgg) {
+					int centerX = (calcRect.right - calcRect.left) / 2;
+					int centerY = (calcRect.bottom - calcRect.top) / 2;
+					RECT closeButtonRect = {centerX - 60, centerY + 180, centerX + 60, centerY + 220};
+					
+					if (relX >= closeButtonRect.left && relX <= closeButtonRect.right &&
+						relY >= closeButtonRect.top && relY <= closeButtonRect.bottom) {
+						showFinalEgg = FALSE;
+						showSpecialMessage = FALSE;
+						specialMessageScrollY = 0;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					return 0;
+				}
+				
+				if (showSpecialMessage) {
+					return 0;
+				}
+				
+				int buttonWidth = 70;
+				int buttonHeight = 40;
+				int startX = calcRect.left + 35;
+				int startY = calcRect.top + 130;
+				
+				if (relY >= startY && relY <= startY + buttonHeight) {
+					if (relX >= startX && relX <= startX + buttonWidth) {
+						CalculatorButtonClick("7");
+					} else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
+						CalculatorButtonClick("8");
+					} else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
+						CalculatorButtonClick("9");
+					} else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
+						CalculatorButtonClick("+");
+					}
+				}
+				else if (relY >= startY + 50 && relY <= startY + 50 + buttonHeight) {
+					if (relX >= startX && relX <= startX + buttonWidth) {
+						CalculatorButtonClick("4");
+					} else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
+						CalculatorButtonClick("5");
+					} else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
+						CalculatorButtonClick("6");
+					} else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
+						CalculatorButtonClick("-");
+					}
+				}
+				else if (relY >= startY + 100 && relY <= startY + 100 + buttonHeight) {
+					if (relX >= startX && relX <= startX + buttonWidth) {
+						CalculatorButtonClick("1");
+					} else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
+						CalculatorButtonClick("2");
+					} else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
+						CalculatorButtonClick("3");
+					} else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
+						CalculatorButtonClick("*");
+					}
+				}
+				else if (relY >= startY + 150 && relY <= startY + 150 + buttonHeight) {
+					if (relX >= startX && relX <= startX + buttonWidth) {
+						CalculatorButtonClick("0");
+					} else if (relX >= startX + 80 && relX <= startX + 80 + buttonWidth) {
+						CalculatorButtonClick("C");
+					} else if (relX >= startX + 160 && relX <= startX + 160 + buttonWidth) {
+						CalculatorButtonClick("=");
+						CheckSpecialMessage();
+					} else if (relX >= startX + 240 && relX <= startX + 240 + buttonWidth) {
+						CalculatorButtonClick("/");
+					}
+				}
+				else if (relY >= startY + 200 && relY <= startY + 200 + buttonHeight) {
+					if (relX >= startX && relX <= startX + buttonWidth) {
+						CalculatorButtonClick(".");
+					}
+				}
+				
+				InvalidateRect(hwnd, NULL, TRUE);
+				return 0;
+			}
+			
+			if (showCalendar && !showEventDialog) {
+				RECT clientRect;
+				GetClientRect(hwnd, &clientRect);
+				int centerX = clientRect.right / 2;
+				int centerY = clientRect.bottom / 2;
+				HandleCalendarMouseClick(x, y, centerX, centerY);
+				InvalidateRect(hwnd, NULL, TRUE);
+				return 0;
+			}
+			break;
+		}
+		
+		case WM_LBUTTONUP: {
+			int x = LOWORD(lParam);
+			int y = HIWORD(lParam);
+			
+			if (showDesktop) {
+				int buttonWidth = 100;
+				int buttonHeight = 40;
+				int buttonY = 10;
+				int buttonStartX = 200;
+				int buttonSpacing = 110;
+				int buttonIndex = 0;
+				
+				int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
+				if (isDesktopPressed) {
+					isDesktopPressed = FALSE;
+					InvalidateRect(hwnd, &desktopRect, TRUE);
+					if (x >= desktopRect.left && x <= desktopRect.right &&
+						y >= desktopRect.top && y <= desktopRect.bottom) {
+						DebugLog("点击: 显示桌面");
+						CloseAllApps(hwnd);
+					}
+				}
+				
+				int fileX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
+				if (isFileManagerPressed) {
+					isFileManagerPressed = FALSE;
+					InvalidateRect(hwnd, &fileRect, TRUE);
+					if (x >= fileRect.left && x <= fileRect.right &&
+						y >= fileRect.top && y <= fileRect.bottom) {
+						DebugLog("点击: 文件管理器");
+						ShowFileManager(hwnd);
+					}
+				}
+				
+				int calcX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
+				if (isCalcPressed) {
+					isCalcPressed = FALSE;
+					InvalidateRect(hwnd, &calcRect, TRUE);
+					if (x >= calcRect.left && x <= calcRect.right &&
+						y >= calcRect.top && y <= calcRect.bottom) {
+						DebugLog("点击: 计算器");
+						ShowCalculator(hwnd);
+					}
+				}
+				
+				int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
+				if (isSysInfoPressed) {
+					isSysInfoPressed = FALSE;
+					InvalidateRect(hwnd, &sysinfoRect, TRUE);
+					if (x >= sysinfoRect.left && x <= sysinfoRect.right &&
+						y >= sysinfoRect.top && y <= sysinfoRect.bottom) {
+						DebugLog("点击: 系统信息");
+						ShowSystemInfo(hwnd);
+					}
+				}
+				
+				if (isActivated) {
+					int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
+					if (isSettingsPressed) {
+						isSettingsPressed = FALSE;
+						InvalidateRect(hwnd, &settingsRect, TRUE);
+						if (x >= settingsRect.left && x <= settingsRect.right &&
+							y >= settingsRect.top && y <= settingsRect.bottom) {
+							DebugLog("点击: 系统设置");
+							ShowSettings(hwnd);
+						}
+					}
+				}
+				
+				if (showGameButton) {
+					int gameX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
+					if (isGamePressed) {
+						isGamePressed = FALSE;
+						InvalidateRect(hwnd, &gameRect, TRUE);
+						if (x >= gameRect.left && x <= gameRect.right &&
+							y >= gameRect.top && y <= gameRect.bottom) {
+							DebugLog("点击: 水母游戏");
+							showGameEgg = TRUE;
+							showDesktop = FALSE;
+							if (!gameInitialized) {
+								InitializeJellyfishGame();
+								gameInitialized = TRUE;
+							}
+							SetTimer(hwnd, 9, 50, NULL);
+							InvalidateRect(hwnd, NULL, TRUE);
+						}
+					}
+				}
+				
+				if (isActivated) {
+					int bugX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
+					if (isBugPressed) {
+						isBugPressed = FALSE;
+						InvalidateRect(hwnd, &bugRect, TRUE);
+						if (x >= bugRect.left && x <= bugRect.right &&
+							y >= bugRect.top && y <= bugRect.bottom) {
+							DebugLog("点击: Bug报告");
+							ShowBugReporter(hwnd);
+						}
+					}
+					
+					int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
+					if (isBugListPressed) {
+						isBugListPressed = FALSE;
+						InvalidateRect(hwnd, &bugListRect, TRUE);
+						if (x >= bugListRect.left && x <= bugListRect.right &&
+							y >= bugListRect.top && y <= bugListRect.bottom) {
+							DebugLog("点击: Bug列表");
+							ShowBugList(hwnd);
+						}
+					}
+				}
+				
+				int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
+				if (isCalendarPressed) {
+					isCalendarPressed = FALSE;
+					InvalidateRect(hwnd, &calendarRect, TRUE);
+					if (x >= calendarRect.left && x <= calendarRect.right &&
+						y >= calendarRect.top && y <= calendarRect.bottom) {
+						DebugLog("点击: 日历");
+						ShowCalendar(hwnd);
+					}
+				}
+				
+				int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
+				if (isShutdownPressed) {
+					isShutdownPressed = FALSE;
+					InvalidateRect(hwnd, &shutdownRect, TRUE);
+					if (x >= shutdownRect.left && x <= shutdownRect.right &&
+						y >= shutdownRect.top && y <= shutdownRect.bottom) {
+						DebugLog("点击: 关机");
+						ShutdownSystem(hwnd);
+					}
+				}
+			}
+			break;
+		}
+		
+		case WM_MOUSEMOVE: {
+			int x = LOWORD(lParam);
+			int y = HIWORD(lParam);
+			
+			if (showDesktop) {
+				// ---- 状态栏悬停检测 ----
+				if (y <= STATUSBAR_HEIGHT) {
+					// 开始按钮悬停
+					BOOL wasStartHovered = isStartButtonHovered;
+					isStartButtonHovered = (x >= 4 && x <= 84);
+					
+					// 日期时间悬停
+					RECT rect;
+					GetClientRect(hwnd, &rect);
+					int timeX = rect.right - 130;
+					isTimeHovered = (x >= timeX);
+					
+					// 通知图标悬停
+					int iconStartX = 94;
+					int iconSize = STATUSBAR_ICON_SIZE;
+					int spacing = STATUSBAR_ICON_SPACING;
+					int notifyX = iconStartX + (iconSize + spacing) * 4;
+					isNotificationHovered = (x >= notifyX && x <= notifyX + iconSize);
+					
+					// 其他图标悬停（简化处理）
+					isNetworkHovered = (x >= iconStartX && x < iconStartX + iconSize + spacing);
+					isVolumeHovered = (x >= iconStartX + iconSize + spacing && x < iconStartX + (iconSize + spacing) * 2);
+					isDisplayHovered = (x >= iconStartX + (iconSize + spacing) * 2 && x < iconStartX + (iconSize + spacing) * 3);
+					isSettingsHovered = (x >= iconStartX + (iconSize + spacing) * 3 && x < iconStartX + (iconSize + spacing) * 4);
+					
+					if (wasStartHovered != isStartButtonHovered) {
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					
+					// 开始菜单悬停检测
+					if (showStartMenu) {
+						HandleStartMenuMouseMove(x, y);
+					}
+					
+					SetCursor(LoadCursor(NULL, IDC_ARROW));
+					break;
+				}
+				
+				// ---- 开始菜单悬停检测 ----
+				if (showStartMenu) {
+					HandleStartMenuMouseMove(x, y);
+				}
+				
+				// ---- 原有任务栏按钮悬停 ----
+				int buttonWidth = 100;
+				int buttonHeight = 40;
+				int buttonY = 10;
+				int buttonStartX = 200;
+				int buttonSpacing = 110;
+				int buttonIndex = 0;
+				
+				int desktopX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT desktopRect = {desktopX, buttonY, desktopX + buttonWidth, buttonY + buttonHeight};
+				BOOL wasDesktopHovered = isDesktopHovered;
+				isDesktopHovered = (x >= desktopRect.left && x <= desktopRect.right &&
+									y >= desktopRect.top && y <= desktopRect.bottom);
+				
+				int fileX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT fileRect = {fileX, buttonY, fileX + buttonWidth, buttonY + buttonHeight};
+				BOOL wasFileManagerHovered = isFileManagerHovered;
+				isFileManagerHovered = (x >= fileRect.left && x <= fileRect.right &&
+										y >= fileRect.top && y <= fileRect.bottom);
+				
+				int calcX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT calcRect = {calcX, buttonY, calcX + buttonWidth, buttonY + buttonHeight};
+				BOOL wasCalcHovered = isCalcHovered;
+				isCalcHovered = (x >= calcRect.left && x <= calcRect.right &&
+								 y >= calcRect.top && y <= calcRect.bottom);
+				
+				int sysinfoX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT sysinfoRect = {sysinfoX, buttonY, sysinfoX + buttonWidth, buttonY + buttonHeight};
+				BOOL wasSysInfoHovered = isSysInfoHovered;
+				isSysInfoHovered = (x >= sysinfoRect.left && x <= sysinfoRect.right &&
+									y >= sysinfoRect.top && y <= sysinfoRect.bottom);
+				
+				BOOL wasSettingsHovered = isSettingsHovered;
+				if (isActivated) {
+					int settingsX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT settingsRect = {settingsX, buttonY, settingsX + buttonWidth, buttonY + buttonHeight};
+					isSettingsHovered = (x >= settingsRect.left && x <= settingsRect.right &&
+										 y >= settingsRect.top && y <= settingsRect.bottom);
+				} else {
+					isSettingsHovered = FALSE;
+				}
+				
+				BOOL wasGameHovered = isGameHovered;
+				if (showGameButton) {
+					int gameX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT gameRect = {gameX, buttonY, gameX + buttonWidth, buttonY + buttonHeight};
+					isGameHovered = (x >= gameRect.left && x <= gameRect.right &&
+									 y >= gameRect.top && y <= gameRect.bottom);
+				} else {
+					isGameHovered = FALSE;
+				}
+				
+				BOOL wasBugHovered = isBugHovered;
+				if (isActivated) {
+					int bugX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT bugRect = {bugX, buttonY, bugX + buttonWidth, buttonY + buttonHeight};
+					isBugHovered = (x >= bugRect.left && x <= bugRect.right &&
+									y >= bugRect.top && y <= bugRect.bottom);
+				} else {
+					isBugHovered = FALSE;
+				}
+				
+				BOOL wasBugListHovered = isBugListHovered;
+				if (isActivated) {
+					int bugListX = buttonStartX + buttonSpacing * buttonIndex++;
+					RECT bugListRect = {bugListX, buttonY, bugListX + buttonWidth, buttonY + buttonHeight};
+					isBugListHovered = (x >= bugListRect.left && x <= bugListRect.right &&
+										y >= bugListRect.top && y <= bugListRect.bottom);
+				} else {
+					isBugListHovered = FALSE;
+				}
+				
+				int calendarX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT calendarRect = {calendarX, buttonY, calendarX + buttonWidth, buttonY + buttonHeight};
+				BOOL wasCalendarHovered = isCalendarHovered;
+				isCalendarHovered = (x >= calendarRect.left && x <= calendarRect.right &&
+									 y >= calendarRect.top && y <= calendarRect.bottom);
+				
+				int shutdownX = buttonStartX + buttonSpacing * buttonIndex++;
+				RECT shutdownRect = {shutdownX, buttonY, shutdownX + buttonWidth, buttonY + buttonHeight};
+				BOOL wasShutdownHovered = isShutdownHovered;
+				isShutdownHovered = (x >= shutdownRect.left && x <= shutdownRect.right &&
+									 y >= shutdownRect.top && y <= shutdownRect.bottom);
+				
+				if (wasDesktopHovered != isDesktopHovered || 
+					wasFileManagerHovered != isFileManagerHovered ||
+					wasCalcHovered != isCalcHovered ||
+					wasSysInfoHovered != isSysInfoHovered ||
+					wasSettingsHovered != isSettingsHovered ||
+					wasGameHovered != isGameHovered ||
+					wasBugHovered != isBugHovered ||
+					wasBugListHovered != isBugListHovered ||
+					wasCalendarHovered != isCalendarHovered ||
+					wasShutdownHovered != isShutdownHovered) {
+					RECT taskbarRect = {0, 0, GetSystemMetrics(SM_CXSCREEN), 60};
+					InvalidateRect(hwnd, &taskbarRect, TRUE);
+				}
+				
+				if (isDesktopHovered || isFileManagerHovered || isCalcHovered || 
+					isSysInfoHovered || isSettingsHovered || isGameHovered || 
+					isBugHovered || isBugListHovered || isCalendarHovered || 
+					isShutdownHovered) {
+					SetCursor(LoadCursor(NULL, IDC_HAND));
+				} else {
+					SetCursor(LoadCursor(NULL, IDC_ARROW));
+				}
+			}
+			break;
+		}
+		
+		case WM_DESTROY: {
+			DebugLog("========== WM_DESTROY 开始 ==========");
+			DebugLog("最终内存状态:");
+			DebugLog("  分配: %d, 释放: %d, 泄漏: %d", 
+					 g_memAllocCount, g_memFreeCount, g_memAllocCount - g_memFreeCount);
+			
+			if (g_memAllocCount - g_memFreeCount > 0) {
+				DebugLog("警告: 存在内存泄漏!");
+				MemBlock* block = g_memHead;
+				int count = 0;
+				while (block) {
+					DebugLog("  泄漏 [%d] %s(%d): %zu 字节", 
+							 ++count, block->file, block->line, block->size);
+					block = block->next;
+				}
+			}
+			
+			KillTimer(hwnd, 1);
+			KillTimer(hwnd, 2);
+			KillTimer(hwnd, 3);
+			KillTimer(hwnd, 4);
+			KillTimer(hwnd, 5);
+			KillTimer(hwnd, 6);
+			KillTimer(hwnd, 7);
+			KillTimer(hwnd, 8);
+			KillTimer(hwnd, 9);
+			KillTimer(hwnd, 98);
+			KillTimer(hwnd, 99);
+			
+			if (hIMC) {
+				ImmReleaseContext(hwnd, hIMC);
+				hIMC = NULL;
+			}
+			
+			if (hBackgroundBitmap) {
+				DeleteObject(hBackgroundBitmap);
+			}
+			if (hEthernetBackground) {
+				DeleteObject(hEthernetBackground);
+			}
+			
+			if (g_sunlight.hPhoto) {
+				DeleteObject(g_sunlight.hPhoto);
+				g_sunlight.hPhoto = NULL;
+			}
+			
+			SaveConfig();
+			SaveCalendarEvents();
+			
+			DebugLog("========== WM_DESTROY 完成 ==========");
+			if (g_debugLog) {
+				fclose(g_debugLog);
+				g_debugLog = NULL;
+			}
+			
+			PostQuitMessage(0);
+			break;
+		}
+		
+		case WM_ERASEBKGND: {
+			return 1;
+		}
+		
+		case WM_PAINT: {
+			PAINTSTRUCT ps;
+			HDC hdc = BeginPaint(hwnd, &ps);
+			
+			RECT rect;
+			GetClientRect(hwnd, &rect);
+			int centerX = rect.right / 2;
+			int centerY = rect.bottom / 2;
+			
+			if (showPurpleScreen) {
+				DrawCriticalPurpleScreen(hdc, rect);
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			
+			if (g_install.isInstalling && !g_install.isComplete) {
+				DrawInstallSlide(hdc, rect);
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			
+			if (g_install.isComplete && !showOOBE) {
+				DrawInstallSlide(hdc, rect);
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			
+			if (g_useSunlightLauncher && !g_sunlight.isFinished && showBootAnimation) {
+				DrawSunlightLauncher(hdc, rect);
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			
+			if (showGameEgg) {
+				DrawJellyfishGame(hdc, hwnd);
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			
+			if (showFOSEgg) {
+				DrawFOSEgg(hdc, hwnd);
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			
+			if (showFOSBeta) {
+				DrawFOSBetaAnimation(hdc, rect);
+			}
+			else if (showBootAnimation) {
+				DrawBootAnimation(hdc, rect);
+			}
+			else if (showShutdown) {
+				DrawShutdownAnimation(hdc, rect);
+			}
+			else if (showCDKeyScreen) {
+				DrawCDKeyInterface(hdc, centerX, centerY);
+			}
+			else if (showDesktop) {
+				DrawDesktop(hdc, rect);
+				
+				// ---- 绘制状态栏 ----
+				DrawStatusBar(hdc, rect);
+				
+				// ---- 绘制应用程序（状态栏下方） ----
+				if (showCalculator) {
+					DrawCalculator(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showSystemInfo) {
+					DrawSystemInfo(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showFileManager) {
+					DrawFileManager(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showFileEditor) {
+					DrawFileEditor(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showSettings) {
+					DrawSettings(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showBugReporter) {
+					DrawBugReporter(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showBugList) {
+					DrawBugList(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+				if (showCalendar) {
+					DrawCalendar(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}if (showClock) {
+					// 使用现有的 DrawClock 函数绘制
+					DrawClock(hdc, centerX, centerY + STATUSBAR_HEIGHT/2);
+				}
+			} else {
+				DrawVistaBackground(hdc, rect);
+				
+				SetBkMode(hdc, TRANSPARENT);
+				SetTextColor(hdc, RGB(255, 255, 255));
+				
+				if (showWelcome) {
+					HFONT hTitleFont = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+												  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+												  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+					HFONT hNormalFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+												   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+												   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+					
+					HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+					TextOut(hdc, centerX - 180, centerY - 100, "系统应急修复程序", 16);
+					SelectObject(hdc, hNormalFont);
+					TextOut(hdc, centerX - 180, centerY - 30, "我们检测到您的系统出现了问题", 28);
+					TextOut(hdc, centerX - 180, centerY + 10, "我们进入了此修补程序", 20);
+					TextOut(hdc, centerX - 180, centerY + 50, "你的文件将会保留，如果进度条卡住，请按空格键以推动进度条", 56);
+					SelectObject(hdc, hOldFont);
+					
+					DrawVistaProgressBar(hdc, centerX - 200, centerY + 100, 400, 20, progressValue);
+					
+					DeleteObject(hTitleFont);
+					DeleteObject(hNormalFont);
+				} 
+				else if (showSecondScreen) {
+					HFONT hTitleFont = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+												  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+												  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+					HFONT hNormalFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+												   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+												   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+					
+					HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+					TextOut(hdc, centerX - 180, centerY - 120, "系统应急修复程序", 16);
+					SelectObject(hdc, hNormalFont);
+					TextOut(hdc, centerX - 180, centerY - 50, "请稍后...", 9);
+					TextOut(hdc, centerX - 180, centerY, "正在初始化应急修复程序，如果进度条卡住，请按空格键以推动进度条", 62);
+					TextOut(hdc, centerX - 180, centerY + 50, "正在启动: 修补程序", 18);
+					SelectObject(hdc, hOldFont);
+					
+					DrawVistaProgressBar(hdc, centerX - 200, centerY + 100, 400, 20, progressValue);
+					
+					DeleteObject(hTitleFont);
+					DeleteObject(hNormalFont);
+				} 
+				else if (showOOBE) {
+					DrawOOBEInterface(hdc, centerX, centerY);
+				}
+				else if (showLogin) {
+					DrawLoginInterface(hdc, centerX, centerY);
+				}
+				else if (showComplete) {
+					HFONT hTitleFont = CreateFont(36, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+												  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+												  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+					HFONT hNormalFont = CreateFont(20, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+												   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+												   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+					
+					HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+					TextOut(hdc, centerX - 200, centerY - 120, "配置完成！", 10);
+					SelectObject(hdc, hNormalFont);
+					TextOut(hdc, centerX - 200, centerY - 50, "欢迎您，", 8);
+					TextOut(hdc, centerX - 120, centerY - 50, username, strlen(username));
+					TextOut(hdc, centerX - 200, centerY, "您的账户已成功创建", 18);
+					TextOut(hdc, centerX - 200, centerY + 50, "请手动关闭程序", 14);
+					SelectObject(hdc, hOldFont);
+					
+					DeleteObject(hTitleFont);
+					DeleteObject(hNormalFont);
+				}
+			}
+			
+			EndPaint(hwnd, &ps);
+			break;
+		}
+	default:
+		return DefWindowProc(hwnd, Message, wParam, lParam);
+	}
+	return 0;
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {

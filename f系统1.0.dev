@@ -11,7 +11,7 @@ ResourceIncludes =
 MakeIncludes = 
 Compiler = 
 CppCompiler = 
-Linker = -lwinmm_@@_-limm32_@@_
+Linker = -lwinmm_@@_-limm32_@@_-msacm32_@@_-ole32_@@_
 IsCpp = 1
 Icon = app.ico
 ExeOutput = 
@@ -78,7 +78,7 @@ RealEncoding = ASCII
 
 
 [Unit2]
-FileName = f系统1.0.layout
+FileName = f1.0_private.h
 Folder = 
 Compile = 0
 Link = 0
@@ -86,7 +86,7 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = ASCII
+RealEncoding = UTF-8
 CompileCpp = 0
 
 
@@ -104,10 +104,10 @@ CompileCpp = 1
 
 
 [Unit4]
-FileName = test_byte_error.txt
+FileName = f1.0_private.rc
 CompileCpp = 1
-Folder = 
-Compile = 0
+Folder = Resources
+Compile = 1
 Link = 0
 Priority = 1000
 OverrideBuildCmd = 0
@@ -117,9 +117,9 @@ RealEncoding = UTF-8
 
 
 [Unit5]
-FileName = f1.0_private.rc
-Folder = Resources
-Compile = 1
+FileName = Makefile.win
+Folder = 
+Compile = 0
 Link = 0
 Priority = 1000
 OverrideBuildCmd = 0
@@ -130,7 +130,7 @@ CompileCpp = 0
 
 
 [Unit6]
-FileName = Makefile.win
+FileName = test_byte_error.txt
 Folder = 
 Compile = 0
 Link = 0
@@ -142,7 +142,7 @@ RealEncoding = UTF-8
 
 
 [Unit7]
-FileName = f1.0_private.h
+FileName = f系统1.0.layout
 Folder = 
 Compile = 0
 Link = 0
@@ -150,7 +150,7 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = UTF-8
+RealEncoding = ASCII
 CompileCpp = 0
 
 

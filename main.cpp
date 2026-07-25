@@ -38,6 +38,8 @@
 //21/07/26 19:01:正式成立Jellyfish-studio位于GitHub上
 //21/07/26 19:01:新的安装流程（在cdkey验证后进入幻灯片）
 //21/07/26 19:01:目前音乐和图片正在制作
+//24/07/26 12:00:上方任务栏重新设置(beta1版本)原先按钮碰撞箱未删除
+//25/07/26 23:59:音量调节真实实现
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
@@ -56,6 +58,13 @@
 #include <time.h>
 #include <string>
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "msacm32.lib") 
+#include <audioclient.h>
+#include <mmdeviceapi.h>
+#include <endpointvolume.h>
+#include <audiopolicy.h>
+
+#pragma comment(lib, "ole32.lib")
 
 // 添加兼容性定义
 #ifndef CP_ACP
@@ -212,6 +221,16 @@ static BOOL g_useSunlightLauncher = TRUE;
 #define ERR_BUTTON_NOT_FOUND     0xF000000D
 #define ERR_WINDOW_PROC          0xF000000E
 #define ERR_STRING_OVERFLOW      0xF000000F
+
+// 在文件开头，所有 #include 之后添加
+#ifdef __MINGW32__
+// 声明 COM 函数
+extern "C" {
+	__declspec(dllimport) HRESULT __stdcall CoInitialize(LPVOID pvReserved);
+	__declspec(dllimport) void __stdcall CoUninitialize(void);
+	__declspec(dllimport) HRESULT __stdcall CoCreateInstance(REFCLSID rclsid, LPUNKNOWN pUnkOuter, DWORD dwClsContext, REFIID riid, LPVOID *ppv);
+}
+#endif
 
 // ==================== 字节错误检测标志 ====================
 static BOOL g_checkByteError = TRUE;  // 默认启用字节错误检测
@@ -1231,6 +1250,253 @@ void CloseStartMenu();
 void ExecuteStartMenuItem(const char* command);
 void UpdateDateTime();
 void AddNotification(const char* message);
+
+// ============================================================
+//  新增：任务栏图标功能 - 全局变量声明
+// ============================================================
+
+// 电池相关
+static BOOL isBatteryHovered = FALSE;
+static BOOL showBatterySettings = FALSE;
+static SYSTEM_POWER_STATUS g_powerStatus;
+static char batteryStatusText[50] = "未知";
+
+// 网络设置相关
+static BOOL showNetworkSettings = FALSE;
+static char networkSSID[100] = "未连接";
+
+// 音量设置相关
+//static BOOL showVolumeSlider = FALSE;
+//static int volumeLevel = 75;
+static BOOL isMuted = FALSE;
+
+// 显示设置相关
+static BOOL showDisplaySettings = FALSE;
+static int brightnessLevel = 80;
+
+// 通知面板
+static BOOL showNotificationsPanel = FALSE;
+//static char notifications[10][200];
+//static int notificationCount = 0;
+
+// 电池图标位置
+static int batteryIconX = 0;
+
+
+// ============================================================
+//  新增：任务栏图标功能 - 函数声明
+// ============================================================
+
+void UpdateBatteryStatus();
+void DrawBatteryIcon(HDC hdc, int x, int y);
+void DrawVolumeSlider(HDC hdc, int x, int y);
+void DrawNotificationPanel(HDC hdc, int x, int y);
+void AddNotification(const char* message);
+
+
+// ============================================================
+//  新增：任务栏图标功能 - 函数实现
+// ============================================================
+
+// 1. 电池状态更新函数
+void UpdateBatteryStatus() {
+	if (GetSystemPowerStatus(&g_powerStatus)) {
+		if (g_powerStatus.BatteryFlag == 128) {
+			strcpy(batteryStatusText, "无电池");
+		} else if (g_powerStatus.BatteryFlag & 8) {
+			sprintf(batteryStatusText, "充电中 %d%%", g_powerStatus.BatteryLifePercent);
+		} else if (g_powerStatus.BatteryLifePercent <= 10) {
+			sprintf(batteryStatusText, "电量低 %d%%", g_powerStatus.BatteryLifePercent);
+		} else {
+			sprintf(batteryStatusText, "%d%%", g_powerStatus.BatteryLifePercent);
+		}
+	} else {
+		strcpy(batteryStatusText, "未知");
+	}
+}
+
+// 2. 电池图标绘制函数
+void DrawBatteryIcon(HDC hdc, int x, int y) {
+	int size = STATUSBAR_ICON_SIZE;
+	COLORREF color = isBatteryHovered ? RGB(180, 210, 255) : RGB(255, 255, 255);
+	
+	HPEN hPen = CreatePen(PS_SOLID, 1, color);
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
+	HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	
+	int bx = x + 2;
+	int by = y + 4;
+	int bw = size - 6;
+	int bh = size - 8;
+	
+	// 电池主体
+	Rectangle(hdc, bx, by, bx + bw, by + bh);
+	
+	// 电池正极端子
+	Rectangle(hdc, bx + bw, by + bh/4, bx + bw + 3, by + bh*3/4);
+	
+	// 电池电量填充
+	if (g_powerStatus.BatteryLifePercent > 0) {
+		int fillW = (bw - 4) * g_powerStatus.BatteryLifePercent / 100;
+		RECT fillRect = {bx + 2, by + 2, bx + 2 + fillW, by + bh - 2};
+		
+		COLORREF fillColor;
+		if (g_powerStatus.BatteryLifePercent <= 10) {
+			fillColor = RGB(255, 50, 50);
+		} else if (g_powerStatus.BatteryLifePercent <= 25) {
+			fillColor = RGB(255, 200, 50);
+		} else {
+			fillColor = RGB(100, 200, 100);
+		}
+		
+		HBRUSH hFillBrush = CreateSolidBrush(fillColor);
+		FillRect(hdc, &fillRect, hFillBrush);
+		DeleteObject(hFillBrush);
+	}
+	
+	// 充电指示（闪电符号）
+	if (g_powerStatus.BatteryFlag & 8) {
+		HBRUSH hChargeBrush = CreateSolidBrush(RGB(255, 255, 0));
+		SelectObject(hdc, hChargeBrush);
+		POINT lightning[] = {
+			{bx + bw/2, by + 2},
+			{bx + bw/2 - 4, by + bh/2},
+			{bx + bw/2, by + bh/2 - 2},
+			{bx + bw/2 - 2, by + bh - 2}
+		};
+		Polygon(hdc, lightning, 4);
+		DeleteObject(hChargeBrush);
+	}
+	
+	SelectObject(hdc, hOldPen);
+	SelectObject(hdc, hOldBrush);
+	DeleteObject(hPen);
+	
+	// 悬停时显示状态
+	if (isBatteryHovered) {
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		HFONT hFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+		char status[80];
+		sprintf(status, "电池: %s", batteryStatusText);
+		TextOut(hdc, x - 20, y - 20, status, strlen(status));
+		SelectObject(hdc, hOldFont);
+		DeleteObject(hFont);
+	}
+}
+
+// 3. 音量滑块绘制函数
+void DrawVolumeSlider(HDC hdc, int x, int y) {
+	RECT sliderRect = {x, y, x + 120, y + 60};
+	HBRUSH hBgBrush = CreateSolidBrush(RGB(40, 40, 60));
+	FillRect(hdc, &sliderRect, hBgBrush);
+	DeleteObject(hBgBrush);
+	
+	HPEN hBorderPen = CreatePen(PS_SOLID, 1, RGB(80, 80, 100));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, x, y, x + 120, y + 60);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	HFONT hFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+							 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+							 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+	
+	char text[50];
+	sprintf(text, "音量: %d%%", volumeLevel);
+	TextOut(hdc, x + 10, y + 8, text, strlen(text));
+	
+	// 音量滑块轨道
+	RECT trackRect = {x + 10, y + 35, x + 110, y + 40};
+	HBRUSH hTrackBrush = CreateSolidBrush(RGB(80, 80, 100));
+	FillRect(hdc, &trackRect, hTrackBrush);
+	DeleteObject(hTrackBrush);
+	
+	// 音量滑块填充
+	int fillWidth = (100 - 10) * volumeLevel / 100;
+	RECT fillRect = {x + 10, y + 35, x + 10 + fillWidth, y + 40};
+	HBRUSH hFillBrush = CreateSolidBrush(RGB(100, 200, 100));
+	FillRect(hdc, &fillRect, hFillBrush);
+	DeleteObject(hFillBrush);
+	
+	// 滑块按钮
+	int knobX = x + 10 + fillWidth - 4;
+	HBRUSH hKnobBrush = CreateSolidBrush(RGB(200, 200, 200));
+	Ellipse(hdc, knobX, y + 31, knobX + 8, y + 44);
+	DeleteObject(hKnobBrush);
+	
+	// 静音按钮
+	TextOut(hdc, x + 10, y + 45, "点击切换静音", 10);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hFont);
+}
+
+// 4. 通知面板绘制函数
+void DrawNotificationPanel(HDC hdc, int x, int y) {
+	int panelHeight = 40 + notificationCount * 30;
+	if (panelHeight > 200) panelHeight = 200;
+	
+	RECT panelRect = {x, y, x + 200, y + panelHeight};
+	HBRUSH hBgBrush = CreateSolidBrush(RGB(30, 30, 50));
+	FillRect(hdc, &panelRect, hBgBrush);
+	DeleteObject(hBgBrush);
+	
+	HPEN hBorderPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, x, y, x + 200, y + panelHeight);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	HFONT hFont = CreateFont(14, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+							 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+							 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+	
+	TextOut(hdc, x + 10, y + 8, "通知", 4);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hFont);
+	
+	HFONT hSmallFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
+	
+	int startY = y + 35;
+	for (int i = 0; i < notificationCount && i < 5; i++) {
+		SetTextColor(hdc, RGB(200, 200, 220));
+		TextOut(hdc, x + 10, startY + i * 30, notifications[i], strlen(notifications[i]));
+	}
+	
+	if (notificationCount == 0) {
+		SetTextColor(hdc, RGB(150, 150, 170));
+		TextOut(hdc, x + 30, startY + 10, "没有新通知", 8);
+	}
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hSmallFont);
+}
+
+//// 5. 添加通知函数
+//void AddNotification(const char* message) {
+//	if (notificationCount < 10) {
+//		strncpy(notifications[notificationCount], message, 199);
+//		notifications[notificationCount][199] = '\0';
+//		notificationCount++;
+//		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+//	}
+//}
 
 // ============================================================
 //  时钟软件函数声明（如果尚未声明）
@@ -4391,6 +4657,65 @@ void DrawNetworkHub(HDC hdc, int x, int y) {
     DeleteObject(hPanelBrush);
     DeleteObject(hHubFont);
 }
+
+
+// ============================================================
+//  新增：真实音量控制函数
+// ============================================================
+
+// 获取当前系统音量（使用 waveOutGetVolume）
+int GetSystemVolume() {
+	int volume = 75;
+	
+	HWAVEOUT hWaveOut;
+	if (waveOutOpen(&hWaveOut, WAVE_MAPPER, NULL, 0, 0, CALLBACK_NULL) == MMSYSERR_NOERROR) {
+		DWORD dwVolume;
+		if (waveOutGetVolume(hWaveOut, &dwVolume) == MMSYSERR_NOERROR) {
+			// 左右声道音量（0-65535）
+			DWORD leftVol = dwVolume & 0xFFFF;
+			DWORD rightVol = (dwVolume >> 16) & 0xFFFF;
+			DWORD avgVol = (leftVol + rightVol) / 2;
+			volume = (int)(avgVol * 100 / 65535);
+			if (volume < 0) volume = 0;
+			if (volume > 100) volume = 100;
+		}
+		waveOutClose(hWaveOut);
+	}
+	
+	return volume;
+}
+
+// 设置系统音量
+// 设置系统音量（使用 WM_APPCOMMAND 模拟音量键）
+void SetSystemVolume(int level) {
+	if (level < 0) level = 0;
+	if (level > 100) level = 100;
+	
+	HWND hwnd = GetActiveWindow();
+	
+	// 先完全降到0（发送25次减音量，确保到0）
+	for (int i = 0; i < 25; i++) {
+		SendMessage(hwnd, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_DOWN << 16);
+		Sleep(10);
+	}
+	
+	// 再升到目标值
+	// Windows 每按一次音量键约调整 2%
+	int steps = level / 2;
+	if (steps < 1 && level > 0) steps = 1;
+	
+	for (int i = 0; i < steps; i++) {
+		SendMessage(hwnd, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_UP << 16);
+		Sleep(10);
+	}
+}
+
+// 静音切换
+void ToggleMute() {
+	HWND hwnd = GetActiveWindow();
+	SendMessage(hwnd, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_MUTE << 16);
+}
+
 
 // 绘制单条网线
 void DrawEthernetCable(HDC hdc, int startX, int startY, int endX, int endY, int cableId) {
@@ -9378,60 +9703,103 @@ void DrawLoginInterface(HDC hdc, int centerX, int centerY) {
 
 // 绘制粉色桌面
 void DrawDesktop(HDC hdc, RECT rect) {
-    HBRUSH hDesktopBrush = CreateSolidBrush(themes[currentThemeIndex].desktopColor);
-    FillRect(hdc, &rect, hDesktopBrush);
-    DeleteObject(hDesktopBrush);
-    
-    // 在桌面右下角绘制守慧吉祥物
-    DrawShouhuiMascot(hdc, rect.right - 100, rect.bottom - 100, 80);
-    
-    HFONT hTitleFont = CreateFont(48, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    HFONT hNormalFont = CreateFont(24, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    HFONT hSmallFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    
-    SetTextColor(hdc, RGB(80, 80, 80));
-    SetBkMode(hdc, TRANSPARENT);
-    
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-    int centerX = (rect.right - rect.left) / 2;
-    int centerY = (rect.bottom - rect.top) / 2;
-    
-    TextOut(hdc, centerX - 200, centerY - 100, "欢迎回来！", 10);
-    
-    SelectObject(hdc, hNormalFont);
-    char welcomeMsg[100];
-    sprintf(welcomeMsg, "欢迎您，%s", username);
-    TextOut(hdc, centerX - 100, centerY - 30, welcomeMsg, strlen(welcomeMsg));
-    
-    char versionMsg[100];
-    sprintf(versionMsg, "f系统 %d.%d Build %d", MAJOR_VERSION, MINOR_VERSION, BUILD_VERSION);
-    TextOut(hdc, centerX - 150, centerY + 30, versionMsg, strlen(versionMsg));
-    
-    // 显示激活状态
-    SelectObject(hdc, hSmallFont);
-    if (isActivated) {
-        SetTextColor(hdc, VISTA_GREEN);
-        TextOut(hdc, centerX - 80, centerY + 80, "? 系统已激活", 11);
-    } else if (isTrialMode) {
-        SetTextColor(hdc, VISTA_ORANGE);
-        char trialMsg[50];
-        sprintf(trialMsg, "? 试用版 (%d天剩余)", trialDaysRemaining);
-        TextOut(hdc, centerX - 100, centerY + 80, trialMsg, strlen(trialMsg));
-    } else {
-        SetTextColor(hdc, VISTA_RED);
-        TextOut(hdc, centerX - 80, centerY + 80, "? 未激活", 9);
-    }
-    
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hTitleFont);
-    DeleteObject(hNormalFont);
-    DeleteObject(hSmallFont);
+	HBRUSH hDesktopBrush = CreateSolidBrush(themes[currentThemeIndex].desktopColor);
+	FillRect(hdc, &rect, hDesktopBrush);
+	DeleteObject(hDesktopBrush);
+	
+	// 在桌面右下角绘制守慧吉祥物
+	DrawShouhuiMascot(hdc, rect.right - 100, rect.bottom - 100, 80);
+	
+	HFONT hTitleFont = CreateFont(48, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hNormalFont = CreateFont(24, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hSmallFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	
+	SetTextColor(hdc, RGB(80, 80, 80));
+	SetBkMode(hdc, TRANSPARENT);
+	
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+	int centerX = (rect.right - rect.left) / 2;
+	int centerY = (rect.bottom - rect.top) / 2;
+	
+	TextOut(hdc, centerX - 200, centerY - 100, "欢迎回来！", 10);
+	
+	SelectObject(hdc, hNormalFont);
+	char welcomeMsg[100];
+	sprintf(welcomeMsg, "欢迎您，%s", username);
+	TextOut(hdc, centerX - 100, centerY - 30, welcomeMsg, strlen(welcomeMsg));
+	
+	char versionMsg[100];
+	sprintf(versionMsg, "f系统 %d.%d Build %d", MAJOR_VERSION, MINOR_VERSION, BUILD_VERSION);
+	TextOut(hdc, centerX - 150, centerY + 30, versionMsg, strlen(versionMsg));
+	
+	SelectObject(hdc, hSmallFont);
+	if (isActivated) {
+		SetTextColor(hdc, VISTA_GREEN);
+		TextOut(hdc, centerX - 80, centerY + 80, "系统已激活", 11);
+	} else if (isTrialMode) {
+		SetTextColor(hdc, VISTA_ORANGE);
+		char trialMsg[50];
+		sprintf(trialMsg, "试用版 (%d天剩余)", trialDaysRemaining);
+		TextOut(hdc, centerX - 100, centerY + 80, trialMsg, strlen(trialMsg));
+	} else {
+		SetTextColor(hdc, VISTA_RED);
+		TextOut(hdc, centerX - 80, centerY + 80, "未激活", 9);
+	}
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTitleFont);
+	DeleteObject(hNormalFont);
+	DeleteObject(hSmallFont);
+	
+	// ============================================================
+	//  1. 先绘制状态栏（内部会同时绘制弹出面板）
+	// ============================================================
+	DrawStatusBar(hdc, rect);
+	
+	// ============================================================
+	//  2. 再绘制应用程序窗口（在状态栏下方）
+	// ============================================================
+	int statusBarHeight = STATUSBAR_HEIGHT;
+	int appCenterX = rect.right / 2;
+	int appCenterY = (rect.bottom - rect.top) / 2 + statusBarHeight / 2;
+	
+	if (showCalculator) {
+		DrawCalculator(hdc, appCenterX, appCenterY);
+	}
+	if (showSystemInfo) {
+		DrawSystemInfo(hdc, appCenterX, appCenterY);
+	}
+	if (showFileManager) {
+		DrawFileManager(hdc, appCenterX, appCenterY);
+	}
+	if (showFileEditor) {
+		DrawFileEditor(hdc, appCenterX, appCenterY);
+	}
+	if (showSettings) {
+		DrawSettings(hdc, appCenterX, appCenterY);
+	}
+	if (showBugReporter) {
+		DrawBugReporter(hdc, appCenterX, appCenterY);
+	}
+	if (showBugList) {
+		DrawBugList(hdc, appCenterX, appCenterY);
+	}
+	if (showCalendar) {
+		DrawCalendar(hdc, appCenterX, appCenterY);
+	}
+	if (showClock) {
+		DrawClock(hdc, appCenterX, appCenterY);
+	}
+	
+	// ============================================================
+	//  3. 弹出面板已经在 DrawStatusBar 中绘制了，不在这里重复绘制
+	// ============================================================
 }
 
 // 绘制任务栏
@@ -11333,11 +11701,12 @@ void DrawNetworkIcon(HDC hdc, int x, int y) {
 	
 	HPEN hOldPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
 	
+	// WiFi信号条
 	for (int i = 0; i < 4; i++) {
 		int barHeight = 4 + i * 3;
 		int barWidth = 3;
 		int barX = x + i * 5 + 2;
-		int barY = y + size - barHeight;
+		int barY = y + size - barHeight - 2;
 		
 		COLORREF barColor = isNetworkConnected ? color : RGB(150, 150, 150);
 		HBRUSH hBrush = CreateSolidBrush(barColor);
@@ -11361,26 +11730,32 @@ void DrawVolumeIcon(HDC hdc, int x, int y) {
 	HBRUSH hBrush = CreateSolidBrush(color);
 	HBRUSH hOldBrush = (HBRUSH)SelectObject(hdc, hBrush);
 	
+	// 扬声器
 	POINT triPoints[3] = {
 		{x + 4, y + size/2 - 6},
 		{x + 4, y + size/2 + 6},
 		{x + 10, y + size/2}
 	};
 	Polygon(hdc, triPoints, 3);
-	
 	Rectangle(hdc, x + 10, y + size/2 - 4, x + 16, y + size/2 + 4);
 	
-	if (volumeLevel > 20) {
+	// 音波
+	if (volumeLevel > 0 && !isMuted) {
 		for (int i = 0; i < 3; i++) {
 			int waveLen = 4 + i * 3;
 			int waveX = x + 20 + i * 3;
-			if (volumeLevel > 40 + i * 20) {
+			if (volumeLevel > 20 + i * 20) {
 				MoveToEx(hdc, waveX, y + size/2 - waveLen/2, NULL);
 				LineTo(hdc, waveX, y + size/2 + waveLen/2);
 				MoveToEx(hdc, waveX + 1, y + size/2 - waveLen/2, NULL);
 				LineTo(hdc, waveX + 1, y + size/2 + waveLen/2);
 			}
 		}
+	} else if (isMuted) {
+		MoveToEx(hdc, x + 18, y + size/2 - 6, NULL);
+		LineTo(hdc, x + 26, y + size/2 + 6);
+		MoveToEx(hdc, x + 26, y + size/2 - 6, NULL);
+		LineTo(hdc, x + 18, y + size/2 + 6);
 	}
 	
 	SelectObject(hdc, hOldBrush);
@@ -11406,6 +11781,16 @@ void DrawDisplayIcon(HDC hdc, int x, int y) {
 	LineTo(hdc, x + size/2 + 4, y + size - 6);
 	LineTo(hdc, x + size/2 + 6, y + size - 2);
 	LineTo(hdc, x + size/2 - 6, y + size - 2);
+	LineTo(hdc, x + size/2 - 4, y + size - 6);
+	
+	// 亮度指示
+	if (brightnessLevel > 0) {
+		int fillHeight = (size - 10) * brightnessLevel / 100;
+		RECT screenRect = {x + 3, y + size - 8 - fillHeight, x + size - 5, y + size - 8};
+		HBRUSH hBrightBrush = CreateSolidBrush(RGB(255, 255, 200));
+		FillRect(hdc, &screenRect, hBrightBrush);
+		DeleteObject(hBrightBrush);
+	}
 	
 	SelectObject(hdc, hOldPen);
 	SelectObject(hdc, hOldBrush);
@@ -11529,6 +11914,9 @@ void DrawStatusBarIcons(HDC hdc, int startX, int y) {
 	int currentX = startX;
 	int iconY = y + (STATUSBAR_HEIGHT - iconSize) / 2;
 	
+	// 更新电池状态
+	UpdateBatteryStatus();
+	
 	DrawNetworkIcon(hdc, currentX, iconY);
 	currentX += iconSize + spacing;
 	
@@ -11539,6 +11927,11 @@ void DrawStatusBarIcons(HDC hdc, int startX, int y) {
 	currentX += iconSize + spacing;
 	
 	DrawSettingsIcon(hdc, currentX, iconY);
+	currentX += iconSize + spacing;
+	
+	// 电池图标
+	batteryIconX = currentX;
+	DrawBatteryIcon(hdc, currentX, iconY);
 	currentX += iconSize + spacing;
 	
 	DrawNotificationIcon(hdc, currentX, iconY);
@@ -11650,14 +12043,14 @@ void DrawStatusBar(HDC hdc, RECT rect) {
 	int currentX = rect.left + 4;
 	int y = rect.top;
 	
-	// 开始按钮（包含所有软件入口）
+	// 开始按钮
 	DrawStartButton(hdc, currentX, y);
 	currentX += 84;
 	
-	// 状态栏图标（网络、音量、显示、设置、通知）
+	// 状态栏图标
 	DrawStatusBarIcons(hdc, currentX + 10, y);
 	
-	// 计算版权信息位置（在状态栏中间偏右，填满剩余空间）
+	// 版权信息
 	HFONT hCopyrightFont = CreateFont(16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
 									  GB2312_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
 									  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
@@ -11668,11 +12061,8 @@ void DrawStatusBar(HDC hdc, RECT rect) {
 	const char* copyrightText = "(C) 果冻鱼工作室 Jellyfish Studio";
 	int copyrightWidth = GetTextWidth(hdc, copyrightText);
 	
-	// 时间区域宽度
 	int timeWidth = 130;
 	int timeX = rect.right - timeWidth - 10;
-	
-	// 计算版权信息位置（在图标和时间之间居中）
 	int iconEndX = currentX + 10 + (STATUSBAR_ICON_SIZE + STATUSBAR_ICON_SPACING) * 5;
 	int availableWidth = timeX - iconEndX - 20;
 	int copyrightX = iconEndX + (availableWidth - copyrightWidth) / 2;
@@ -11683,14 +12073,120 @@ void DrawStatusBar(HDC hdc, RECT rect) {
 	SelectObject(hdc, hOldFont);
 	DeleteObject(hCopyrightFont);
 	
-	// 日期时间（最右侧）
+	// 日期时间
 	int timeY = y;
 	DrawDateTime(hdc, rect.right - timeWidth - 10, timeY);
 	
-	// 开始菜单（显示在开始按钮下方）
+	// 开始菜单
 	if (showStartMenu) {
 		DrawStartMenu(hdc, rect.left, rect.top);
 	}
+	
+	// ============================================================
+	//  修复：任务栏绘制完成后，立即重绘弹出面板
+	//  确保弹出面板在任务栏之上
+	// ============================================================
+	int iconSize = STATUSBAR_ICON_SIZE;
+	int spacing = STATUSBAR_ICON_SPACING;
+	
+	// 网络状态面板
+	if (showNetworkSettings) {
+		RECT panelRect = {94, STATUSBAR_HEIGHT, 94 + 150, STATUSBAR_HEIGHT + 60};
+		HBRUSH hPanelBrush = CreateSolidBrush(RGB(30, 30, 50));
+		FillRect(hdc, &panelRect, hPanelBrush);
+		DeleteObject(hPanelBrush);
+		
+		HPEN hPanelBorderPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+		HPEN hOldPanelPen = (HPEN)SelectObject(hdc, hPanelBorderPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, panelRect.left, panelRect.top, panelRect.right, panelRect.bottom);
+		SelectObject(hdc, hOldPanelPen);
+		DeleteObject(hPanelBorderPen);
+		
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		HFONT hPanelFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+									  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldPanelFont = (HFONT)SelectObject(hdc, hPanelFont);
+		TextOut(hdc, 104, STATUSBAR_HEIGHT + 14, "网络状态", 8);
+		TextOut(hdc, 104, STATUSBAR_HEIGHT + 34, isNetworkConnected ? "● 已连接" : "○ 未连接", 14);
+		SelectObject(hdc, hOldPanelFont);
+		DeleteObject(hPanelFont);
+	}
+	
+	// 音量滑块面板
+	if (showVolumeSlider) {
+		DrawVolumeSlider(hdc, 94 + iconSize + spacing, STATUSBAR_HEIGHT);
+	}
+	
+	// 显示设置面板
+	if (showDisplaySettings) {
+		int displayX = 94 + (iconSize + spacing) * 2;
+		RECT panelRect = {displayX, STATUSBAR_HEIGHT, displayX + 150, STATUSBAR_HEIGHT + 80};
+		HBRUSH hPanelBrush = CreateSolidBrush(RGB(30, 30, 50));
+		FillRect(hdc, &panelRect, hPanelBrush);
+		DeleteObject(hPanelBrush);
+		
+		HPEN hPanelBorderPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+		HPEN hOldPanelPen = (HPEN)SelectObject(hdc, hPanelBorderPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, panelRect.left, panelRect.top, panelRect.right, panelRect.bottom);
+		SelectObject(hdc, hOldPanelPen);
+		DeleteObject(hPanelBorderPen);
+		
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		HFONT hPanelFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+									  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldPanelFont = (HFONT)SelectObject(hdc, hPanelFont);
+		TextOut(hdc, displayX + 10, STATUSBAR_HEIGHT + 14, "显示设置", 8);
+		char brightText[50];
+		sprintf(brightText, "亮度: %d%%", brightnessLevel);
+		TextOut(hdc, displayX + 10, STATUSBAR_HEIGHT + 34, brightText, strlen(brightText));
+		TextOut(hdc, displayX + 10, STATUSBAR_HEIGHT + 54, "点击调整亮度", 12);
+		SelectObject(hdc, hOldPanelFont);
+		DeleteObject(hPanelFont);
+	}
+	
+	// 电池信息面板
+	if (showBatterySettings) {
+		RECT panelRect = {batteryIconX, STATUSBAR_HEIGHT, batteryIconX + 160, STATUSBAR_HEIGHT + 80};
+		HBRUSH hPanelBrush = CreateSolidBrush(RGB(30, 30, 50));
+		FillRect(hdc, &panelRect, hPanelBrush);
+		DeleteObject(hPanelBrush);
+		
+		HPEN hPanelBorderPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+		HPEN hOldPanelPen = (HPEN)SelectObject(hdc, hPanelBorderPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, panelRect.left, panelRect.top, panelRect.right, panelRect.bottom);
+		SelectObject(hdc, hOldPanelPen);
+		DeleteObject(hPanelBorderPen);
+		
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		HFONT hPanelFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+									  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldPanelFont = (HFONT)SelectObject(hdc, hPanelFont);
+		TextOut(hdc, batteryIconX + 10, STATUSBAR_HEIGHT + 14, "电池信息", 8);
+		TextOut(hdc, batteryIconX + 10, STATUSBAR_HEIGHT + 34, batteryStatusText, strlen(batteryStatusText));
+		if (g_powerStatus.BatteryLifePercent > 0) {
+			char lifeText[50];
+			sprintf(lifeText, "剩余: %d%%", g_powerStatus.BatteryLifePercent);
+			TextOut(hdc, batteryIconX + 10, STATUSBAR_HEIGHT + 54, lifeText, strlen(lifeText));
+		}
+		SelectObject(hdc, hOldPanelFont);
+		DeleteObject(hPanelFont);
+	}
+	
+	// 通知面板
+	if (showNotificationsPanel) {
+		int notifyX = 94 + (iconSize + spacing) * 5;
+		DrawNotificationPanel(hdc, notifyX - 100, STATUSBAR_HEIGHT);
+	}
+	
 	DebugLog("DrawStatusBar: 完成");
 }
 
@@ -11730,17 +12226,19 @@ void HandleStartMenuMouseMove(int x, int y) {
 // ============================================================
 void HandleStatusBarClick(int x, int y) {
 	DebugLog("HandleStatusBarClick: x=%d, y=%d", x, y);
+	
 	if (x >= 4 && x <= 84 && y >= 4 && y <= 4 + STATUSBAR_HEIGHT - 8) {
-		DebugLog("HandleStatusBarClick: 点击开始按钮");
+		DebugLog("点击开始按钮");
 		ToggleStartMenu();
 		return;
 	}
 	
 	RECT clientRect;
 	GetClientRect(GetActiveWindow(), &clientRect);
+	
 	int timeX = clientRect.right - 130;
 	if (x >= timeX && y >= 0 && y <= STATUSBAR_HEIGHT) {
-		DebugLog("HandleStatusBarClick: 点击时间区域，打开日历");
+		DebugLog("点击时间区域");
 		ShowCalendar(GetActiveWindow());
 		return;
 	}
@@ -11749,24 +12247,94 @@ void HandleStatusBarClick(int x, int y) {
 	int iconSize = STATUSBAR_ICON_SIZE;
 	int spacing = STATUSBAR_ICON_SPACING;
 	
-	int notifyX = iconStartX + (iconSize + spacing) * 4;
-	if (x >= notifyX && x <= notifyX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
-		DebugLog("HandleStatusBarClick: 点击通知图标");
-		showNotifications = !showNotifications;
+	// 网络图标
+	int networkX = iconStartX;
+	if (x >= networkX && x <= networkX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("点击网络图标");
+		showNetworkSettings = !showNetworkSettings;
+		showVolumeSlider = FALSE;
+		showDisplaySettings = FALSE;
+		showBatterySettings = FALSE;
+		showNotificationsPanel = FALSE;
 		InvalidateRect(GetActiveWindow(), NULL, TRUE);
 		return;
 	}
 	
+	// 音量图标
+	int volumeX = iconStartX + (iconSize + spacing) * 1;
+	if (x >= volumeX && x <= volumeX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("点击音量图标");
+		showVolumeSlider = !showVolumeSlider;
+		showNetworkSettings = FALSE;
+		showDisplaySettings = FALSE;
+		showBatterySettings = FALSE;
+		showNotificationsPanel = FALSE;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+		return;
+	}
+	
+	// 显示图标
+	int displayX = iconStartX + (iconSize + spacing) * 2;
+	if (x >= displayX && x <= displayX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("点击显示图标");
+		showDisplaySettings = !showDisplaySettings;
+		showNetworkSettings = FALSE;
+		showVolumeSlider = FALSE;
+		showBatterySettings = FALSE;
+		showNotificationsPanel = FALSE;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+		return;
+	}
+	
+	// 设置图标
+	int settingsX = iconStartX + (iconSize + spacing) * 3;
+	if (x >= settingsX && x <= settingsX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("点击设置图标");
+		ShowSettings(GetActiveWindow());
+		return;
+	}
+	
+	// 电池图标
+	int batteryX = iconStartX + (iconSize + spacing) * 4;
+	if (x >= batteryX && x <= batteryX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("点击电池图标");
+		showBatterySettings = !showBatterySettings;
+		showNetworkSettings = FALSE;
+		showVolumeSlider = FALSE;
+		showDisplaySettings = FALSE;
+		showNotificationsPanel = FALSE;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+		return;
+	}
+	
+	// 通知图标
+	int notifyX = iconStartX + (iconSize + spacing) * 5;
+	if (x >= notifyX && x <= notifyX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+		DebugLog("点击通知图标");
+		showNotificationsPanel = !showNotificationsPanel;
+		showNetworkSettings = FALSE;
+		showVolumeSlider = FALSE;
+		showDisplaySettings = FALSE;
+		showBatterySettings = FALSE;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+		return;
+	}
+	
+	// 关闭所有弹出面板
+	if (showNetworkSettings || showVolumeSlider || showDisplaySettings || 
+		showBatterySettings || showNotificationsPanel) {
+		showNetworkSettings = FALSE;
+		showVolumeSlider = FALSE;
+		showDisplaySettings = FALSE;
+		showBatterySettings = FALSE;
+		showNotificationsPanel = FALSE;
+		InvalidateRect(GetActiveWindow(), NULL, TRUE);
+	}
+	
 	if (showStartMenu) {
-		int menuWidth = STARTMENU_WIDTH;
-		int menuHeight = STARTMENU_MAX_HEIGHT;
-		if (!(x >= 0 && x <= menuWidth && y >= STATUSBAR_HEIGHT && y <= STATUSBAR_HEIGHT + menuHeight)) {
-			DebugLog("HandleStatusBarClick: 点击菜单外部，关闭菜单");
-			CloseStartMenu();
-		}
+		CloseStartMenu();
 	}
 }
-
 // ============================================================
 //  处理开始菜单点击
 // ============================================================
@@ -11916,6 +12484,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			
 			DebugLog("加载日历事件...");
 			LoadCalendarEvents();
+			// ============================================================
+			// 初始化通知和电池状态
+			// ============================================================
+			notificationCount = 0;
+			for (int i = 0; i < 10; i++) {
+				notifications[i][0] = '\0';
+			}
+			UpdateBatteryStatus();
+			DebugLog("通知和电池状态初始化完成");
+			
+			volumeLevel = GetSystemVolume();
+			DebugLog("当前系统音量: %d%%", volumeLevel);
 			
 			// ---- 强制关闭所有界面 ----
 			showFOSBeta = FALSE;
@@ -12045,6 +12625,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			
 			if (wParam == 7) {
 				if (showDesktop) {
+					UpdateBatteryStatus();
 					InvalidateRect(hwnd, NULL, FALSE);
 				}
 				break;
@@ -13045,15 +13626,87 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			}
 			
 			if (showDesktop) {
-				// ---- 状态栏鼠标处理 ----
+				// ============================================================
+				//  【新增】状态栏图标点击处理（网络、音量、显示、设置、电池、通知）
+				// ============================================================
 				if (y <= STATUSBAR_HEIGHT) {
-					// 检查是否点击了开始按钮
+					int iconStartX = 94;
+					int iconSize = STATUSBAR_ICON_SIZE;
+					int spacing = STATUSBAR_ICON_SPACING;
+					
+					// 开始按钮
 					if (x >= 4 && x <= 84) {
 						ToggleStartMenu();
 						return 0;
 					}
 					
-					// 检查是否点击了日期时间
+					// 网络图标
+					if (x >= iconStartX && x <= iconStartX + iconSize) {
+						showNetworkSettings = !showNetworkSettings;
+						showVolumeSlider = FALSE;
+						showDisplaySettings = FALSE;
+						showBatterySettings = FALSE;
+						showNotificationsPanel = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 音量图标
+					if (x >= iconStartX + (iconSize + spacing) * 1 && 
+						x <= iconStartX + (iconSize + spacing) * 1 + iconSize) {
+						showVolumeSlider = !showVolumeSlider;
+						showNetworkSettings = FALSE;
+						showDisplaySettings = FALSE;
+						showBatterySettings = FALSE;
+						showNotificationsPanel = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 显示图标
+					if (x >= iconStartX + (iconSize + spacing) * 2 && 
+						x <= iconStartX + (iconSize + spacing) * 2 + iconSize) {
+						showDisplaySettings = !showDisplaySettings;
+						showNetworkSettings = FALSE;
+						showVolumeSlider = FALSE;
+						showBatterySettings = FALSE;
+						showNotificationsPanel = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 设置图标
+					if (x >= iconStartX + (iconSize + spacing) * 3 && 
+						x <= iconStartX + (iconSize + spacing) * 3 + iconSize) {
+						ShowSettings(GetActiveWindow());
+						return 0;
+					}
+					
+					// 电池图标
+					if (x >= iconStartX + (iconSize + spacing) * 4 && 
+						x <= iconStartX + (iconSize + spacing) * 4 + iconSize) {
+						showBatterySettings = !showBatterySettings;
+						showNetworkSettings = FALSE;
+						showVolumeSlider = FALSE;
+						showDisplaySettings = FALSE;
+						showNotificationsPanel = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 通知图标
+					if (x >= iconStartX + (iconSize + spacing) * 5 && 
+						x <= iconStartX + (iconSize + spacing) * 5 + iconSize) {
+						showNotificationsPanel = !showNotificationsPanel;
+						showNetworkSettings = FALSE;
+						showVolumeSlider = FALSE;
+						showDisplaySettings = FALSE;
+						showBatterySettings = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 时间区域 - 打开日历
 					RECT rect;
 					GetClientRect(hwnd, &rect);
 					int timeX = rect.right - 130;
@@ -13062,23 +13715,72 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 						return 0;
 					}
 					
-					// 检查是否点击了通知图标
-					int iconStartX = 94;
-					int iconSize = STATUSBAR_ICON_SIZE;
-					int spacing = STATUSBAR_ICON_SPACING;
-					int notifyX = iconStartX + (iconSize + spacing) * 4;
-					if (x >= notifyX && x <= notifyX + iconSize) {
-						showNotifications = !showNotifications;
+					// 点击状态栏其他区域关闭弹出面板
+					if (showNetworkSettings || showVolumeSlider || showDisplaySettings || 
+						showBatterySettings || showNotificationsPanel) {
+						showNetworkSettings = FALSE;
+						showVolumeSlider = FALSE;
+						showDisplaySettings = FALSE;
+						showBatterySettings = FALSE;
+						showNotificationsPanel = FALSE;
 						InvalidateRect(hwnd, NULL, TRUE);
 						return 0;
 					}
 					
-					// 点击状态栏其他区域，关闭开始菜单
+					// 关闭开始菜单
 					if (showStartMenu) {
 						CloseStartMenu();
+						return 0;
 					}
-					return 0;
 				}
+				// ============================================================
+				//  【新增结束】
+				// ============================================================
+				
+				// ============================================================
+				//  【新增】弹出面板交互（音量滑块、亮度调整）
+				// ============================================================
+				// 音量滑块交互
+				// 音量滑块交互（真实控制）
+				if (showVolumeSlider) {
+					int sliderX = 94 + STATUSBAR_ICON_SIZE + STATUSBAR_ICON_SPACING;
+					if (x >= sliderX && x <= sliderX + 120 && y >= STATUSBAR_HEIGHT && y <= STATUSBAR_HEIGHT+60 ) {
+						int relX = x - sliderX - 10;
+						if (relX >= 0 && relX <= 100) {
+							volumeLevel = relX;
+							if (volumeLevel < 0) volumeLevel = 0;
+							if (volumeLevel > 100) volumeLevel = 100;
+							
+							// 【新增】设置真实系统音量
+							SetSystemVolume(volumeLevel);
+							
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+						// 静音按钮
+						if (x >= sliderX + 10 && x <= sliderX + 60 && y >= 45 && y <= 60) {
+							isMuted = !isMuted;
+							// 【新增】真实静音控制
+							ToggleMute();
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+					}
+				}
+				
+				// 显示设置交互（点击调整亮度）
+				if (showDisplaySettings) {
+					int displayX = 94 + (STATUSBAR_ICON_SIZE + STATUSBAR_ICON_SPACING) * 2;
+					if (x >= displayX && x <= displayX + 150 && y >= 4 && y <= 84) {
+						brightnessLevel = (brightnessLevel + 10) % 110;
+						if (brightnessLevel > 100) brightnessLevel = 100;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+				}
+				// ============================================================
+				//  【新增结束】
+				// ============================================================
 				
 				// ---- 开始菜单点击处理 ----
 				if (showStartMenu) {
@@ -13482,6 +14184,53 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			int x = LOWORD(lParam);
 			int y = HIWORD(lParam);
 			
+			 if (showDesktop && y <= STATUSBAR_HEIGHT) {
+				 int iconStartX = 94;
+				 int iconSize = STATUSBAR_ICON_SIZE;
+				 int spacing = STATUSBAR_ICON_SPACING;
+				 
+				 // 开始按钮悬停
+				 isStartButtonHovered = (x >= 4 && x <= 84);
+				 
+				 // 网络图标悬停
+				 isNetworkHovered = (x >= iconStartX && x <= iconStartX + iconSize);
+				 
+				 // 音量图标悬停
+				 isVolumeHovered = (x >= iconStartX + (iconSize + spacing) * 1 && 
+									x <= iconStartX + (iconSize + spacing) * 1 + iconSize);
+				 
+				 // 显示图标悬停
+				 isDisplayHovered = (x >= iconStartX + (iconSize + spacing) * 2 && 
+									 x <= iconStartX + (iconSize + spacing) * 2 + iconSize);
+				 
+				 // 设置图标悬停
+				 isSettingsHovered = (x >= iconStartX + (iconSize + spacing) * 3 && 
+									  x <= iconStartX + (iconSize + spacing) * 3 + iconSize);
+				 
+				 // 电池图标悬停
+				 isBatteryHovered = (x >= iconStartX + (iconSize + spacing) * 4 && 
+									 x <= iconStartX + (iconSize + spacing) * 4 + iconSize);
+				 
+				 // 通知图标悬停
+				 isNotificationHovered = (x >= iconStartX + (iconSize + spacing) * 5 && 
+										  x <= iconStartX + (iconSize + spacing) * 5 + iconSize);
+				 
+				 // 时间区域悬停
+				 RECT clientRect;
+				 GetClientRect(hwnd, &clientRect);
+				 int timeX = clientRect.right - 130;
+				 isTimeHovered = (x >= timeX);
+				 
+				 // 开始菜单悬停
+				 if (showStartMenu) {
+					 HandleStartMenuMouseMove(x, y);
+				 }
+				 
+				 InvalidateRect(hwnd, NULL, TRUE);
+				 SetCursor(LoadCursor(NULL, IDC_ARROW));
+				 break;
+			 }
+			
 			if (showDesktop) {
 				// ---- 状态栏悬停检测 ----
 				if (y <= STATUSBAR_HEIGHT) {
@@ -13874,6 +14623,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 	}
 	return 0;
 }
+
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     try {

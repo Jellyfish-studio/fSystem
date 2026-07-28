@@ -42,6 +42,8 @@
 //25/07/26 23:59:音量调节真实实现
 //27/07/26 12:00:亮度调节真实实现
 //28/07/26 14:00:修复了亮度调节的bug
+//28/07/26 20:08:文件管理器支持PgUp和PgDn进行调整显示行数位置
+
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
@@ -857,6 +859,10 @@ void DeleteBug(int index);
 void DrawJellyfishPleaScene(HDC hdc, int centerX, int centerY);
 void DrawPleadingJellyfish(HDC hdc, int x, int y, int size);
 
+static char commandOutput[10000000] = ""; // 命令输出 - 增大缓冲区
+static int commandOutputScrollOffset = 0; // 命令行输出滚动偏移量（行数）
+static int commandOutputMaxLines = 0;     // 当前输出的最大行数
+
 // 全局变量
 static BOOL showFOSBeta = TRUE;
 static BOOL showBootAnimation = FALSE;
@@ -948,7 +954,7 @@ static char fileList[100][256];
 static int fileCount = 0;
 static char commandInput[100] = "";  // 命令输入
 static BOOL commandMode = FALSE;     // 命令模式标志
-static char commandOutput[10000000] = ""; // 命令输出 - 增大缓冲区
+//static char commandOutput[10000000] = ""; // 命令输出 - 增大缓冲区
 
 // 文件编辑器变量
 static BOOL showFileEditor = FALSE;
@@ -5774,277 +5780,280 @@ void RenameFileReal(const char* oldname, const char* newname) {
 }
 
 void HandleFileManagerCommand(const char* command) {
-    try {
-        char cmd[100];
-        char param[100];
-        strcpy(cmd, command);
-        
-        char* spacePos = strchr(cmd, ' ');
-        if (spacePos) {
-            *spacePos = '\0';
-            strcpy(param, spacePos + 1);
-        } else {
-            strcpy(param, "");
-        }
-        
-        for (int i = 0; cmd[i]; i++) {
-            cmd[i] = tolower(cmd[i]);
-        }
-        
-        // ===== DEBUG测试命令 =====
-        if (strcmp(cmd, "testbyte") == 0) {
-            char testFilePath[MAX_PATH];
-            sprintf(testFilePath, "%s\\test_byte_error.txt", currentPath);
-            
-            HANDLE hTestFile = CreateFile(testFilePath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (hTestFile != INVALID_HANDLE_VALUE) {
-                // 创建包含各种字节错误的真实测试文件
-                unsigned char testData[] = {
-                    0xE6, 0xB5, 0x8B, 0xE8, 0xAF, 0x95,  // "测试" (正常UTF-8)
-                    0xE6, 0x96, 0x87, 0xE4, 0xBB, 0xB6,  // "文件" (正常UTF-8)
-                    0x0D, 0x0A,                          // 换行
-                    0xE6, 0xAD, 0xA3, 0xE5, 0xB8, 0xB8,  // "正常" (正常UTF-8)
-                    0xE6, 0x96, 0x87, 0xE6, 0x9C, 0xAC,  // "文本" (正常UTF-8)
-                    0x0D, 0x0A,                          // 换行
-                    0xE6, 0x9C, 0x89, 0xE9, 0x94, 0x99,  // "有错" (正常UTF-8)
-                    0xE8, 0xAF, 0xAF,                    // "误" (正常UTF-8)
-                    0x0D, 0x0A,                          // 换行
-                    0xC0, 0x80,                          // 无效UTF-8序列 (错误1)
-                    0x0D, 0x0A,                          // 换行
-                    0xE0, 0x80, 0x80,                    // 无效UTF-8序列 (错误2)
-                    0x0D, 0x0A,                          // 换行
-                    0x48, 0x65, 0x6C, 0x6C, 0x6F,        // "Hello" (正常)
-                    0x00,                                // NULL字节 (错误3)
-                    0x57, 0x6F, 0x72, 0x6C, 0x64,        // "World" (正常)
-                    0x0D, 0x0A,                          // 换行
-                    0x01,                                // 非打印控制字符 (错误4)
-                    0x0B,                                // 垂直制表符 (错误5)
-                    0xE6, 0xAD, 0xA3, 0xE5, 0xB8, 0xB8,  // "正常" (正常UTF-8)
-                    0xE7, 0xBB, 0x93, 0xE6, 0x9D, 0x9F,  // "结束" (正常UTF-8)
-                    0x0D, 0x0A                           // 换行
-                };
-                DWORD bytesWritten;
-                WriteFile(hTestFile, testData, sizeof(testData), &bytesWritten, NULL);
-                CloseHandle(hTestFile);
-                
-                sprintf(commandOutput, "测试文件已创建: test_byte_error.txt\n"
-                                       "包含内容:\n"
-                                       "  - 正常UTF-8中文文本\n"
-                                       "  - 无效UTF-8序列 (0xC0 0x80)\n"
-                                       "  - 无效UTF-8序列 (0xE0 0x80 0x80)\n"
-                                       "  - NULL字节 (0x00)\n"
-                                       "  - 非打印控制字符 (0x01, 0x0B)\n\n"
-                                       "正在用 read 命令打开，触发字节错误检测...");
-                RefreshFileList();
-                
-                // 确保启用检测，用read命令打开
-                g_checkByteError = TRUE;
-                OpenFileWithEditor("test_byte_error.txt");
-            } else {
-                strcpy(commandOutput, "创建测试文件失败！");
-            }
-        }
-        else if (strcmp(cmd, "testleak") == 0) {
-            char* leak1 = (char*)MALLOC(1024);
-            char* leak2 = (char*)MALLOC(2048);
-            char* leak3 = (char*)MALLOC(512);
-            (void)leak1; (void)leak2; (void)leak3;
-            sprintf(commandOutput, "已分配1024、2048和512字节内存（用于测试泄漏检测）\n按 Ctrl+D 导出调试信息查看泄漏报告");
-            DebugLog("测试泄漏: 分配了 %d 字节", 1024 + 2048 + 512);
-            RefreshFileList();
-        }
-        else if (strcmp(cmd, "testbtn") == 0) {
-            TriggerDebugPurpleScreen(NULL, ERR_BUTTON_UNASSIGNED,
-                "按钮未分配测试\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "按钮名称: 测试按钮\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "可能原因:\n"
-                "  1. 功能未激活（如专业版功能）\n"
-                "  2. 条件未满足（如彩蛋未解锁）\n"
-                "  3. 配置错误\n"
-                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                "建议: 检查功能激活状态和配置");
-        }
-        else if (strcmp(cmd, "testfile") == 0) {
-            char testFilePath[MAX_PATH];
-            sprintf(testFilePath, "%s\\test_normal.txt", currentPath);
-            
-            HANDLE hTestFile = CreateFile(testFilePath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (hTestFile != INVALID_HANDLE_VALUE) {
-                const char* normalData = "这是一个正常的UTF-8文本文件。\n用于测试文件读取功能。\nHello World! 你好世界！\n";
-                DWORD bytesWritten;
-                WriteFile(hTestFile, normalData, strlen(normalData), &bytesWritten, NULL);
-                CloseHandle(hTestFile);
-                
-                sprintf(commandOutput, "正常测试文件已创建: test_normal.txt\n正在尝试读取...");
-                RefreshFileList();
-                g_checkByteError = TRUE;
-                OpenFileWithEditor("test_normal.txt");
-            } else {
-                strcpy(commandOutput, "创建正常测试文件失败！");
-            }
-        }
-        else if (strcmp(cmd, "testmem") == 0) {
-            char memInfo[500];
-            sprintf(memInfo, "当前内存状态:\n"
-                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                            "内存分配: %d 次\n"
-                            "内存释放: %d 次\n"
-                            "内存泄漏: %d 处\n"
-                            "总分配字节: %d 字节\n"
-                            "总释放字节: %d 字节\n"
-                            "当前使用: %d 字节\n"
-                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                            g_memAllocCount, g_memFreeCount, 
-                            g_memAllocCount - g_memFreeCount,
-                            g_memTotalAllocated, g_memTotalFreed,
-                            g_memTotalAllocated - g_memTotalFreed);
-            strcpy(commandOutput, memInfo);
-        }
-        else if (strcmp(cmd, "list") == 0) {
-            ListFiles();
-        }
-        else if (strcmp(cmd, "to") == 0) {
-            if (strlen(param) > 0) {
-                ChangeDirectory(param);
-            } else {
-                strcpy(commandOutput, "用法：to <路径> \n示例：to C:\\Windows");
-            }
-        }
-        else if (strcmp(cmd, "new") == 0) {
-            if (strlen(param) > 0) {
-                CreateDirectoryReal(param);
-            } else {
-                strcpy(commandOutput, "用法：new <目录名称>");
-            }
-        }
-        else if (strcmp(cmd, "read") == 0) {
-            if (strlen(param) > 0) {
-                // read命令：用fos内置编辑器打开，启用字节错误检测
-                DebugLog("执行read命令: %s", param);
-                g_checkByteError = TRUE;
-                OpenFileWithEditor(param);
-            } else {
-                strcpy(commandOutput, "用法：read <文件名>");
-            }
-        }
-        else if (strcmp(cmd, "rem") == 0) {
-            if (strlen(param) > 0) {
-                DeleteFileReal(param);
-            } else {
-                strcpy(commandOutput, "用法：rem <文件名>");
-            }
-        }
-        else if (strcmp(cmd, "cop") == 0) {
-            char source[100], target[100];
-            if (sscanf(param, "%s %s", source, target) == 2) {
-                CopyFileReal(source, target);
-            } else {
-                strcpy(commandOutput, "用法：cop <源文件> <目标路径>");
-            }
-        }
-        else if (strcmp(cmd, "name") == 0) {
-            char oldname[100], newname[100];
-            if (sscanf(param, "%s %s", oldname, newname) == 2) {
-                RenameFileReal(oldname, newname);
-            } else {
-                strcpy(commandOutput, "用法：name <原文件名> <新文件名>");
-            }
-        }
-        else if (strcmp(cmd, "newf") == 0) {
-            if (strlen(param) > 0) {
-                CreateFileReal(param);
-            } else {
-                strcpy(commandOutput, "用法：newf <文件名>");
-            }
-        }
-        else if (strcmp(cmd, "open") == 0) {
-            if (strlen(param) > 0) {
-                // open命令：用Windows默认程序打开，禁用字节错误检测
-                DebugLog("执行open命令: %s", param);
-                OpenFileWithWindows(param);
-            } else {
-                strcpy(commandOutput, "用法：open <文件名>");
-            }
-        }
-        else if (strcmp(cmd, "hidden") == 0) {
-            showHiddenFiles = !showHiddenFiles;
-            RefreshFileList();
-            sprintf(commandOutput, "隐藏文件现已 %s", showHiddenFiles ? "可见" : "隐藏");
-        }
-        else if (strcmp(cmd, "where") == 0) {
-            sprintf(commandOutput, "当前目录： %s", currentPath);
-        }
-        else if (strcmp(cmd, "help") == 0) {
-            ShowHelp();
-        }
-        else if (strcmp(cmd, "clear") == 0) {
-            strcpy(commandOutput, "屏幕已清空");
-        }
-        else if (strcmp(cmd, "bye") == 0) {
-            showFileManager = FALSE;
-            strcpy(commandOutput, "文件管理器已关闭");
-        }
-        else if (strcmp(cmd, "about") == 0) {
-            strcpy(commandOutput, "fOS 文件管理器 v1.0 专业版\n版本 200 (专业版)");
-        }
-        else if (strcmp(cmd, "now") == 0) {
-            char dateStr[50], timeStr[50];
-            GetCurrentDateTime(dateStr, timeStr);
-            sprintf(commandOutput, "当前日期：%s\n当前时间：%s", dateStr, timeStr);
-        }
-        else if (strcmp(cmd, "bug") == 0) {
-            ShowBugReporter(NULL);
-        }
-        else if (strcmp(cmd, "buglist") == 0) {
-            ShowBugList(NULL);
-        }
-        else if (strcmp(cmd, "error") == 0) {
-            TriggerCriticalPurpleScreen(NULL);
-            strcpy(commandOutput, "触发系统致命错误...");
-        }
-        else if (strcmp(cmd, "kill") == 0 && strcmp(param, "jellyfish") == 0) {
-            showFOSEgg = TRUE;
-            showFileManager = FALSE;
-            fosEggState = 5;
-            fosEggProgress = 0;
-            currentDevStage = 0;
-            dialogueIndexx = 0;
-            lastFOSEggTime = GetTickCount();
-        }
-        else if (strlen(cmd) > 0) {
-            // 检查是否是打开文件命令
-            if (strstr(cmd, ".txt") || strstr(cmd, ".c") || strstr(cmd, ".cpp") || 
-                strstr(cmd, ".h") || strstr(cmd, ".exe") || strstr(cmd, ".bat") ||
-                strstr(cmd, ".log") || strstr(cmd, ".docx") || strstr(cmd, ".doc") ||
-                strstr(cmd, ".md") || strstr(cmd, ".ini") || strstr(cmd, ".conf") ||
-                strstr(cmd, ".js") || strstr(cmd, ".html") || strstr(cmd, ".css")) {
-                OpenFile(cmd);
-            } else {
-                sprintf(commandOutput, "未知命令：%s\n输入 'help' 查看可用命令", cmd);
-            }
-        }
-    }
-    catch (const std::exception& e) {
-        DebugLog("文件管理器命令异常: %s", e.what());
-        TriggerDebugPurpleScreen(NULL, ERR_INVALID_PARAM,
-            "文件管理器命令执行失败\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "异常信息: %s\n"
-            "命令: %s\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "请检查 fos_debug.log 获取详细信息", e.what(), command);
-    }
-    catch (...) {
-        DebugLog("文件管理器命令未知异常");
-        TriggerDebugPurpleScreen(NULL, ERR_INVALID_PARAM,
-            "文件管理器命令执行发生未知异常\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "命令: %s\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "请检查 fos_debug.log 获取详细信息", command);
-    }
+	try {
+		char cmd[100];
+		char param[100];
+		strcpy(cmd, command);
+		
+		char* spacePos = strchr(cmd, ' ');
+		if (spacePos) {
+			*spacePos = '\0';
+			strcpy(param, spacePos + 1);
+		} else {
+			strcpy(param, "");
+		}
+		
+		for (int i = 0; cmd[i]; i++) {
+			cmd[i] = tolower(cmd[i]);
+		}
+		
+		// ===== DEBUG测试命令 =====
+		if (strcmp(cmd, "testbyte") == 0) {
+			char testFilePath[MAX_PATH];
+			sprintf(testFilePath, "%s\\test_byte_error.txt", currentPath);
+			
+			HANDLE hTestFile = CreateFile(testFilePath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (hTestFile != INVALID_HANDLE_VALUE) {
+				unsigned char testData[] = {
+					0xE6, 0xB5, 0x8B, 0xE8, 0xAF, 0x95,
+					0xE6, 0x96, 0x87, 0xE4, 0xBB, 0xB6,
+					0x0D, 0x0A,
+					0xE6, 0xAD, 0xA3, 0xE5, 0xB8, 0xB8,
+					0xE6, 0x96, 0x87, 0xE6, 0x9C, 0xAC,
+					0x0D, 0x0A,
+					0xE6, 0x9C, 0x89, 0xE9, 0x94, 0x99,
+					0xE8, 0xAF, 0xAF,
+					0x0D, 0x0A,
+					0xC0, 0x80,
+					0x0D, 0x0A,
+					0xE0, 0x80, 0x80,
+					0x0D, 0x0A,
+					0x48, 0x65, 0x6C, 0x6C, 0x6F,
+					0x00,
+					0x57, 0x6F, 0x72, 0x6C, 0x64,
+					0x0D, 0x0A,
+					0x01,
+					0x0B,
+					0xE6, 0xAD, 0xA3, 0xE5, 0xB8, 0xB8,
+					0xE7, 0xBB, 0x93, 0xE6, 0x9D, 0x9F,
+					0x0D, 0x0A
+				};
+				DWORD bytesWritten;
+				WriteFile(hTestFile, testData, sizeof(testData), &bytesWritten, NULL);
+				CloseHandle(hTestFile);
+				
+				sprintf(commandOutput, "测试文件已创建: test_byte_error.txt\n"
+						"包含内容:\n"
+						"  - 正常UTF-8中文文本\n"
+						"  - 无效UTF-8序列 (0xC0 0x80)\n"
+						"  - 无效UTF-8序列 (0xE0 0x80 0x80)\n"
+						"  - NULL字节 (0x00)\n"
+						"  - 非打印控制字符 (0x01, 0x0B)\n\n"
+						"正在用 read 命令打开，触发字节错误检测...");
+				RefreshFileList();
+				
+				g_checkByteError = TRUE;
+				OpenFileWithEditor("test_byte_error.txt");
+			} else {
+				strcpy(commandOutput, "创建测试文件失败！");
+			}
+		}
+		else if (strcmp(cmd, "testleak") == 0) {
+			char* leak1 = (char*)MALLOC(1024);
+			char* leak2 = (char*)MALLOC(2048);
+			char* leak3 = (char*)MALLOC(512);
+			(void)leak1; (void)leak2; (void)leak3;
+			sprintf(commandOutput, "已分配1024、2048和512字节内存（用于测试泄漏检测）\n按 Ctrl+D 导出调试信息查看泄漏报告");
+			DebugLog("测试泄漏: 分配了 %d 字节", 1024 + 2048 + 512);
+			RefreshFileList();
+		}
+		else if (strcmp(cmd, "testbtn") == 0) {
+			TriggerDebugPurpleScreen(NULL, ERR_BUTTON_UNASSIGNED,
+									 "按钮未分配测试\n"
+									 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+									 "按钮名称: 测试按钮\n"
+									 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+									 "可能原因:\n"
+									 "  1. 功能未激活（如专业版功能）\n"
+									 "  2. 条件未满足（如彩蛋未解锁）\n"
+									 "  3. 配置错误\n"
+									 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+									 "建议: 检查功能激活状态和配置");
+		}
+		else if (strcmp(cmd, "testfile") == 0) {
+			char testFilePath[MAX_PATH];
+			sprintf(testFilePath, "%s\\test_normal.txt", currentPath);
+			
+			HANDLE hTestFile = CreateFile(testFilePath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (hTestFile != INVALID_HANDLE_VALUE) {
+				const char* normalData = "这是一个正常的UTF-8文本文件。\n用于测试文件读取功能。\nHello World! 你好世界！\n";
+				DWORD bytesWritten;
+				WriteFile(hTestFile, normalData, strlen(normalData), &bytesWritten, NULL);
+				CloseHandle(hTestFile);
+				
+				sprintf(commandOutput, "正常测试文件已创建: test_normal.txt\n正在尝试读取...");
+				RefreshFileList();
+				g_checkByteError = TRUE;
+				OpenFileWithEditor("test_normal.txt");
+			} else {
+				strcpy(commandOutput, "创建正常测试文件失败！");
+			}
+		}
+		else if (strcmp(cmd, "testmem") == 0) {
+			char memInfo[500];
+			sprintf(memInfo, "当前内存状态:\n"
+					"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+					"内存分配: %d 次\n"
+					"内存释放: %d 次\n"
+					"内存泄漏: %d 处\n"
+					"总分配字节: %d 字节\n"
+					"总释放字节: %d 字节\n"
+					"当前使用: %d 字节\n"
+					"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+					g_memAllocCount, g_memFreeCount, 
+					g_memAllocCount - g_memFreeCount,
+					g_memTotalAllocated, g_memTotalFreed,
+					g_memTotalAllocated - g_memTotalFreed);
+			strcpy(commandOutput, memInfo);
+		}
+		else if (strcmp(cmd, "list") == 0) {
+			ListFiles();
+		}
+		else if (strcmp(cmd, "to") == 0) {
+			if (strlen(param) > 0) {
+				ChangeDirectory(param);
+			} else {
+				strcpy(commandOutput, "用法：to <路径> \n示例：to C:\\Windows");
+			}
+		}
+		else if (strcmp(cmd, "new") == 0) {
+			if (strlen(param) > 0) {
+				CreateDirectoryReal(param);
+			} else {
+				strcpy(commandOutput, "用法：new <目录名称>");
+			}
+		}
+		else if (strcmp(cmd, "read") == 0) {
+			if (strlen(param) > 0) {
+				DebugLog("执行read命令: %s", param);
+				g_checkByteError = TRUE;
+				OpenFileWithEditor(param);
+			} else {
+				strcpy(commandOutput, "用法：read <文件名>");
+			}
+		}
+		else if (strcmp(cmd, "rem") == 0) {
+			if (strlen(param) > 0) {
+				DeleteFileReal(param);
+			} else {
+				strcpy(commandOutput, "用法：rem <文件名>");
+			}
+		}
+		else if (strcmp(cmd, "cop") == 0) {
+			char source[100], target[100];
+			if (sscanf(param, "%s %s", source, target) == 2) {
+				CopyFileReal(source, target);
+			} else {
+				strcpy(commandOutput, "用法：cop <源文件> <目标路径>");
+			}
+		}
+		else if (strcmp(cmd, "name") == 0) {
+			char oldname[100], newname[100];
+			if (sscanf(param, "%s %s", oldname, newname) == 2) {
+				RenameFileReal(oldname, newname);
+			} else {
+				strcpy(commandOutput, "用法：name <原文件名> <新文件名>");
+			}
+		}
+		else if (strcmp(cmd, "newf") == 0) {
+			if (strlen(param) > 0) {
+				CreateFileReal(param);
+			} else {
+				strcpy(commandOutput, "用法：newf <文件名>");
+			}
+		}
+		else if (strcmp(cmd, "open") == 0) {
+			if (strlen(param) > 0) {
+				DebugLog("执行open命令: %s", param);
+				OpenFileWithWindows(param);
+			} else {
+				strcpy(commandOutput, "用法：open <文件名>");
+			}
+		}
+		else if (strcmp(cmd, "hidden") == 0) {
+			showHiddenFiles = !showHiddenFiles;
+			RefreshFileList();
+			sprintf(commandOutput, "隐藏文件现已 %s", showHiddenFiles ? "可见" : "隐藏");
+		}
+		else if (strcmp(cmd, "where") == 0) {
+			sprintf(commandOutput, "当前目录： %s", currentPath);
+		}
+		else if (strcmp(cmd, "help") == 0) {
+			ShowHelp();
+		}
+		else if (strcmp(cmd, "clear") == 0) {
+			strcpy(commandOutput, "屏幕已清空");
+		}
+		else if (strcmp(cmd, "bye") == 0) {
+			showFileManager = FALSE;
+			strcpy(commandOutput, "文件管理器已关闭");
+		}
+		else if (strcmp(cmd, "about") == 0) {
+			strcpy(commandOutput, "fOS 文件管理器 v1.0 专业版\n版本 200 (专业版)");
+		}
+		else if (strcmp(cmd, "now") == 0) {
+			char dateStr[50], timeStr[50];
+			GetCurrentDateTime(dateStr, timeStr);
+			sprintf(commandOutput, "当前日期：%s\n当前时间：%s", dateStr, timeStr);
+		}
+		else if (strcmp(cmd, "bug") == 0) {
+			ShowBugReporter(NULL);
+		}
+		else if (strcmp(cmd, "buglist") == 0) {
+			ShowBugList(NULL);
+		}
+		else if (strcmp(cmd, "error") == 0) {
+			TriggerCriticalPurpleScreen(NULL);
+			strcpy(commandOutput, "触发系统致命错误...");
+		}
+		else if (strcmp(cmd, "kill") == 0 && strcmp(param, "jellyfish") == 0) {
+			showFOSEgg = TRUE;
+			showFileManager = FALSE;
+			fosEggState = 5;
+			fosEggProgress = 0;
+			currentDevStage = 0;
+			dialogueIndexx = 0;
+			lastFOSEggTime = GetTickCount();
+		}
+		else if (strlen(cmd) > 0) {
+			if (strstr(cmd, ".txt") || strstr(cmd, ".c") || strstr(cmd, ".cpp") || 
+				strstr(cmd, ".h") || strstr(cmd, ".exe") || strstr(cmd, ".bat") ||
+				strstr(cmd, ".log") || strstr(cmd, ".docx") || strstr(cmd, ".doc") ||
+				strstr(cmd, ".md") || strstr(cmd, ".ini") || strstr(cmd, ".conf") ||
+				strstr(cmd, ".js") || strstr(cmd, ".html") || strstr(cmd, ".css")) {
+				OpenFile(cmd);
+			} else {
+				sprintf(commandOutput, "未知命令：%s\n输入 'help' 查看可用命令", cmd);
+			}
+		}
+	}
+	catch (const std::exception& e) {
+		DebugLog("文件管理器命令异常: %s", e.what());
+		TriggerDebugPurpleScreen(NULL, ERR_INVALID_PARAM,
+								 "文件管理器命令执行失败\n"
+								 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+								 "异常信息: %s\n"
+								 "命令: %s\n"
+								 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+								 "请检查 fos_debug.log 获取详细信息", e.what(), command);
+	}
+	catch (...) {
+		DebugLog("文件管理器命令未知异常");
+		TriggerDebugPurpleScreen(NULL, ERR_INVALID_PARAM,
+								 "文件管理器命令执行发生未知异常\n"
+								 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+								 "命令: %s\n"
+								 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+								 "请检查 fos_debug.log 获取详细信息", command);
+	}
+	
+	// ========== 添加：更新滚动状态 ==========
+	commandOutputScrollOffset = 0;
+	commandOutputMaxLines = 0;
+	for (int i = 0; commandOutput[i]; i++) {
+		if (commandOutput[i] == '\n') commandOutputMaxLines++;
+	}
+	if (strlen(commandOutput) > 0 && commandOutputMaxLines == 0) commandOutputMaxLines = 1;
 }
 
 // 执行文件管理器命令
@@ -10665,158 +10674,211 @@ void DrawSystemInfo(HDC hdc, int centerX, int centerY) {
 
 // 绘制文件管理器
 void DrawFileManager(HDC hdc, int centerX, int centerY) {
-    RECT fileRect = {centerX - 400, centerY - 300, centerX + 400, centerY + 300};
-    
-    // 检查功能是否可用
-    if (!IsFeatureAvailable(3)) {
-        // 绘制功能受限提示
-        HBRUSH hRestrictedBgBrush = CreateSolidBrush(RGB(255, 240, 240));
-        FillRect(hdc, &fileRect, hRestrictedBgBrush);
-        DeleteObject(hRestrictedBgBrush);
-        
-        HPEN hBorderPen = CreatePen(PS_SOLID, 2, VISTA_RED);
-        HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
-        SelectObject(hdc, GetStockObject(NULL_BRUSH));
-        Rectangle(hdc, fileRect.left, fileRect.top, fileRect.right, fileRect.bottom);
-        SelectObject(hdc, hOldPen);
-        DeleteObject(hBorderPen);
-        
-        SetTextColor(hdc, VISTA_RED);
-        SetBkMode(hdc, TRANSPARENT);
-        
-        HFONT hTitleFont = CreateFont(24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-        HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-        
-        TextOut(hdc, centerX - 150, centerY - 50, "功能受限", 8);
-        
-        HFONT hContentFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-            DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-        SelectObject(hdc, hContentFont);
-        
-        TextOut(hdc, centerX - 200, centerY, "文件管理器在试用模式下不可用", 26);
-        TextOut(hdc, centerX - 180, centerY + 30, "请激活系统以使用完整功能", 24);
-        
-        // 绘制激活按钮
-        RECT activateRect = {centerX - 80, centerY + 80, centerX + 80, centerY + 120};
-        HBRUSH hActivateBrush = CreateSolidBrush(VISTA_GREEN);
-        FillRect(hdc, &activateRect, hActivateBrush);
-        DeleteObject(hActivateBrush);
-    
-        HPEN hActivatePen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
-        hOldPen = (HPEN)SelectObject(hdc, hActivatePen);
-        SelectObject(hdc, GetStockObject(NULL_BRUSH));
-        Rectangle(hdc, centerX - 80, centerY + 80, centerX + 80, centerY + 120);
-        SelectObject(hdc, hOldPen);
-        DeleteObject(hActivatePen);
-    
-        SetTextColor(hdc, RGB(255, 255, 255));
-        TextOut(hdc, centerX - 30, centerY + 95, "激活", 4);
-        
-        SelectObject(hdc, hOldFont);
-        DeleteObject(hTitleFont);
-        DeleteObject(hContentFont);
-        return;
-    }
-    
-    // 正常文件管理器界面
-    HBRUSH hFileBgBrush = CreateSolidBrush(FILEMANAGER_BG);
-    FillRect(hdc, &fileRect, hFileBgBrush);
-    DeleteObject(hFileBgBrush);
-    
-    HPEN hBorderPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100));
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
-    SelectObject(hdc, GetStockObject(NULL_BRUSH));
-    Rectangle(hdc, fileRect.left, fileRect.top, fileRect.right, fileRect.bottom);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hBorderPen);
-    
-    // 在标题栏左侧绘制守慧吉祥物
-    DrawShouhuiMascot(hdc, fileRect.left + 10, fileRect.top - 5, 40);
-    
-    SetTextColor(hdc, RGB(0, 0, 0));
-    SetBkMode(hdc, TRANSPARENT);
-    
-    HFONT hTitleFont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-    
-    TextOut(hdc, centerX - 60, fileRect.top + 10, "文件管理器", 10);
-    
-    HFONT hContentFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    SelectObject(hdc, hContentFont);
-    
-    // 显示当前路径
-    TextOut(hdc, fileRect.left + 20, fileRect.top + 50, "路径：", 6);
-    TextOut(hdc, fileRect.left + 60, fileRect.top + 50, currentPath, strlen(currentPath));
-    
-    // 绘制命令输入区域
-    RECT inputRect = {fileRect.left + 20, fileRect.top + 80, fileRect.right - 20, fileRect.top + 110};
-    HBRUSH hInputBrush = CreateSolidBrush(RGB(255, 255, 255));
-    FillRect(hdc, &inputRect, hInputBrush);
-    DeleteObject(hInputBrush);
-    
-    HPEN hInputPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
-    hOldPen = (HPEN)SelectObject(hdc, hInputPen);
-    SelectObject(hdc, GetStockObject(NULL_BRUSH));
-    Rectangle(hdc, fileRect.left + 20, fileRect.top + 80, fileRect.right - 20, fileRect.top + 110);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hInputPen);
-    
-    // 显示命令提示符和输入
-    TextOut(hdc, fileRect.left + 25, fileRect.top + 85, "∈->", 4);
-    TextOut(hdc, fileRect.left + 65, fileRect.top + 85, commandInput, strlen(commandInput));
-    
-    // 绘制光标
-    static DWORD lastBlink = GetTickCount();
-    static BOOL showCursor = TRUE;
-    
-    if (GetTickCount() - lastBlink > 500) {
-        showCursor = !showCursor;
-        lastBlink = GetTickCount();
-    }
-    
-    if (showCursor) {
-        int textWidth = GetTextWidth(hdc, commandInput);
-        MoveToEx(hdc, fileRect.left + 65 + textWidth, fileRect.top + 85, NULL);
-        LineTo(hdc, fileRect.left + 65 + textWidth, fileRect.top + 105);
-    }
-    
-    // 绘制输出区域
-    RECT outputRect = {fileRect.left + 20, fileRect.top + 120, fileRect.right - 20, fileRect.bottom - 60};
-    HBRUSH hOutputBrush = CreateSolidBrush(RGB(240, 240, 240));
-    FillRect(hdc, &outputRect, hOutputBrush);
-    DeleteObject(hOutputBrush);
-    
-    HPEN hOutputPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
-    hOldPen = (HPEN)SelectObject(hdc, hOutputPen);
-    SelectObject(hdc, GetStockObject(NULL_BRUSH));
-    Rectangle(hdc, fileRect.left + 20, fileRect.top + 120, fileRect.right - 20, fileRect.bottom - 60);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hOutputPen);
-    
-    // 显示命令输出
-    RECT textRect = {fileRect.left + 25, fileRect.top + 125, fileRect.right - 25, fileRect.bottom - 65};
-    DrawText(hdc, commandOutput, -1, &textRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
-    
-    // 绘制帮助提示
-    HFONT hSmallFont = CreateFont(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    SelectObject(hdc, hSmallFont);
-    
-    SetTextColor(hdc, RGB(100, 100, 100));
-    TextOut(hdc, fileRect.left + 20, fileRect.bottom - 40, "输入 'help' 查看可用命令", 24);
-    
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hTitleFont);
-    DeleteObject(hContentFont);
-    DeleteObject(hSmallFont);
+	RECT fileRect = {centerX - 400, centerY - 300, centerX + 400, centerY + 300};
+	
+	// 检查功能是否可用
+	if (!IsFeatureAvailable(3)) {
+		// 绘制功能受限提示
+		HBRUSH hRestrictedBgBrush = CreateSolidBrush(RGB(255, 240, 240));
+		FillRect(hdc, &fileRect, hRestrictedBgBrush);
+		DeleteObject(hRestrictedBgBrush);
+		
+		HPEN hBorderPen = CreatePen(PS_SOLID, 2, VISTA_RED);
+		HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, fileRect.left, fileRect.top, fileRect.right, fileRect.bottom);
+		SelectObject(hdc, hOldPen);
+		DeleteObject(hBorderPen);
+		
+		SetTextColor(hdc, VISTA_RED);
+		SetBkMode(hdc, TRANSPARENT);
+		
+		HFONT hTitleFont = CreateFont(24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+									  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+		
+		TextOut(hdc, centerX - 150, centerY - 50, "功能受限", 8);
+		
+		HFONT hContentFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+										DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+										DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		SelectObject(hdc, hContentFont);
+		
+		TextOut(hdc, centerX - 200, centerY, "文件管理器在试用模式下不可用", 26);
+		TextOut(hdc, centerX - 180, centerY + 30, "请激活系统以使用完整功能", 24);
+		
+		RECT activateRect = {centerX - 80, centerY + 80, centerX + 80, centerY + 120};
+		HBRUSH hActivateBrush = CreateSolidBrush(VISTA_GREEN);
+		FillRect(hdc, &activateRect, hActivateBrush);
+		DeleteObject(hActivateBrush);
+		
+		HPEN hActivatePen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+		hOldPen = (HPEN)SelectObject(hdc, hActivatePen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, centerX - 80, centerY + 80, centerX + 80, centerY + 120);
+		SelectObject(hdc, hOldPen);
+		DeleteObject(hActivatePen);
+		
+		SetTextColor(hdc, RGB(255, 255, 255));
+		TextOut(hdc, centerX - 30, centerY + 95, "激活", 4);
+		
+		SelectObject(hdc, hOldFont);
+		DeleteObject(hTitleFont);
+		DeleteObject(hContentFont);
+		return;
+	}
+	
+	// 正常文件管理器界面
+	HBRUSH hFileBgBrush = CreateSolidBrush(FILEMANAGER_BG);
+	FillRect(hdc, &fileRect, hFileBgBrush);
+	DeleteObject(hFileBgBrush);
+	
+	HPEN hBorderPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 100));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, fileRect.left, fileRect.top, fileRect.right, fileRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	// 在标题栏左侧绘制守慧吉祥物
+	DrawShouhuiMascot(hdc, fileRect.left + 10, fileRect.top - 5, 40);
+	
+	SetTextColor(hdc, RGB(0, 0, 0));
+	SetBkMode(hdc, TRANSPARENT);
+	
+	HFONT hTitleFont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+	
+	TextOut(hdc, centerX - 60, fileRect.top + 10, "文件管理器", 10);
+	
+	HFONT hContentFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+									DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+									DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	SelectObject(hdc, hContentFont);
+	
+	// 显示当前路径
+	TextOut(hdc, fileRect.left + 20, fileRect.top + 50, "路径：", 6);
+	TextOut(hdc, fileRect.left + 60, fileRect.top + 50, currentPath, strlen(currentPath));
+	
+	// 绘制命令输入区域
+	RECT inputRect = {fileRect.left + 20, fileRect.top + 80, fileRect.right - 20, fileRect.top + 110};
+	HBRUSH hInputBrush = CreateSolidBrush(RGB(255, 255, 255));
+	FillRect(hdc, &inputRect, hInputBrush);
+	DeleteObject(hInputBrush);
+	
+	HPEN hInputPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
+	hOldPen = (HPEN)SelectObject(hdc, hInputPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, fileRect.left + 20, fileRect.top + 80, fileRect.right - 20, fileRect.top + 110);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hInputPen);
+	
+	// 显示命令提示符和输入
+	TextOut(hdc, fileRect.left + 25, fileRect.top + 85, "∈->", 4);
+	TextOut(hdc, fileRect.left + 65, fileRect.top + 85, commandInput, strlen(commandInput));
+	
+	// 绘制光标
+	static DWORD lastBlink = GetTickCount();
+	static BOOL showCursor = TRUE;
+	
+	if (GetTickCount() - lastBlink > 500) {
+		showCursor = !showCursor;
+		lastBlink = GetTickCount();
+	}
+	
+	if (showCursor) {
+		int textWidth = GetTextWidth(hdc, commandInput);
+		MoveToEx(hdc, fileRect.left + 65 + textWidth, fileRect.top + 85, NULL);
+		LineTo(hdc, fileRect.left + 65 + textWidth, fileRect.top + 105);
+	}
+	
+	// 绘制输出区域
+	RECT outputRect = {fileRect.left + 20, fileRect.top + 120, fileRect.right - 20, fileRect.bottom - 60};
+	HBRUSH hOutputBrush = CreateSolidBrush(RGB(240, 240, 240));
+	FillRect(hdc, &outputRect, hOutputBrush);
+	DeleteObject(hOutputBrush);
+	
+	HPEN hOutputPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
+	hOldPen = (HPEN)SelectObject(hdc, hOutputPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, fileRect.left + 20, fileRect.top + 120, fileRect.right - 20, fileRect.bottom - 60);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hOutputPen);
+	
+	// ========== 修改：显示命令输出（支持滚动） ==========
+	RECT textRect = {fileRect.left + 25, fileRect.top + 125, fileRect.right - 25, fileRect.bottom - 65};
+	
+	// 如果有滚动偏移，截取显示
+	if (commandOutputScrollOffset > 0 && commandOutputMaxLines > 0) {
+		int lineHeight = 16;
+		int visibleLines = (textRect.bottom - textRect.top) / lineHeight;
+		if (visibleLines < 1) visibleLines = 1;
+		
+		// 确保滚动偏移不超出范围
+		if (commandOutputScrollOffset > commandOutputMaxLines - visibleLines) {
+			commandOutputScrollOffset = max(0, commandOutputMaxLines - visibleLines);
+		}
+		
+		// 从滚动位置开始显示
+		char* lineStart = commandOutput;
+		int currentLine = 0;
+		for (int i = 0; commandOutput[i] && currentLine < commandOutputScrollOffset; i++) {
+			if (commandOutput[i] == '\n') {
+				currentLine++;
+				if (currentLine == commandOutputScrollOffset) {
+					lineStart = &commandOutput[i + 1];
+					break;
+				}
+			}
+		}
+		
+		DrawText(hdc, lineStart, -1, &textRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+		
+		// 显示滚动位置信息
+		HFONT hScrollInfoFont = CreateFont(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+										   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+										   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		HFONT hOldScrollFont = (HFONT)SelectObject(hdc, hScrollInfoFont);
+		SetTextColor(hdc, RGB(150, 150, 150));
+		char scrollInfo[50];
+		sprintf(scrollInfo, "行 %d/%d (PgUp/PgDn滚动)", commandOutputScrollOffset + 1, commandOutputMaxLines);
+		TextOut(hdc, fileRect.right - 150, fileRect.bottom - 55, scrollInfo, strlen(scrollInfo));
+		SelectObject(hdc, hOldScrollFont);
+		DeleteObject(hScrollInfoFont);
+	} else {
+		DrawText(hdc, commandOutput, -1, &textRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+		
+		// 显示总行数信息
+		if (commandOutputMaxLines > 0) {
+			HFONT hScrollInfoFont = CreateFont(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+											   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+											   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+			HFONT hOldScrollFont = (HFONT)SelectObject(hdc, hScrollInfoFont);
+			SetTextColor(hdc, RGB(150, 150, 150));
+			char scrollInfo[50];
+			sprintf(scrollInfo, "共 %d 行 (PgUp/PgDn滚动)", commandOutputMaxLines);
+			TextOut(hdc, fileRect.right - 150, fileRect.bottom - 55, scrollInfo, strlen(scrollInfo));
+			SelectObject(hdc, hOldScrollFont);
+			DeleteObject(hScrollInfoFont);
+		}
+	}
+	
+	// 绘制帮助提示
+	HFONT hSmallFont = CreateFont(10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	SelectObject(hdc, hSmallFont);
+	
+	SetTextColor(hdc, RGB(100, 100, 100));
+	TextOut(hdc, fileRect.left + 20, fileRect.bottom - 40, "输入 'help' 查看可用命令  |  PgUp/PgDn 滚动输出", 49);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTitleFont);
+	DeleteObject(hContentFont);
+	DeleteObject(hSmallFont);
 }
 
 // 执行文件
@@ -13344,9 +13406,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					ShowCalendar(hwnd);
 				}
 			}
+			
+			// ============================================================
+			// 新增：文件管理器 PgDn/PgUp 滚动支持（每次滚动1行）
+			// 必须放在 showDesktop 之后，且在所有其他界面检查之后
+			// ============================================================
+			if (showFileManager) {
+				if (wParam == VK_NEXT) { // PgDn - 向下滚动1行
+					if (commandOutputScrollOffset < commandOutputMaxLines - 1) {
+						commandOutputScrollOffset++;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					return 0;
+				}
+				else if (wParam == VK_PRIOR) { // PgUp - 向上滚动1行
+					if (commandOutputScrollOffset > 0) {
+						commandOutputScrollOffset--;
+						InvalidateRect(hwnd, NULL, TRUE);
+					}
+					return 0;
+				}
+				// 不拦截其他按键，让它们继续传递到 WM_CHAR
+			}
+			
 			break;
 		}
-		
 		case WM_LBUTTONDOWN: {
 			int x = LOWORD(lParam);
 			int y = HIWORD(lParam);

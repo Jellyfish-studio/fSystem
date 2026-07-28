@@ -40,6 +40,8 @@
 //21/07/26 19:01:目前音乐和图片正在制作
 //24/07/26 12:00:上方任务栏重新设置(beta1版本)原先按钮碰撞箱未删除
 //25/07/26 23:59:音量调节真实实现
+//27/07/26 12:00:亮度调节真实实现
+//28/07/26 14:00:修复了亮度调节的bug
 #include <windows.h>
 #include <string.h>
 #include <stdio.h>
@@ -51,6 +53,13 @@
 #include <algorithm>
 #include <mmsystem.h>
 #include <imm.h>
+#include <powrprof.h>        // 电源管理API
+#include <physicalmonitorenumerationapi.h>  // 物理显示器
+#include <highlevelmonitorconfigurationapi.h>  // 显示器配置
+
+//#define WINVER 0x0600
+//#define _WIN32_WINNT 0x0600
+#include <windows.h>
 
 #include <math.h>
 #include <mmsystem.h>
@@ -65,11 +74,21 @@
 #include <audiopolicy.h>
 
 #pragma comment(lib, "ole32.lib")
+#include <physicalmonitorenumerationapi.h>
+#include <highlevelmonitorconfigurationapi.h>
 
 // 添加兼容性定义
 #ifndef CP_ACP
 #define CP_ACP 0
 #endif
+
+// 在文件开头，所有 include 之后添加
+#ifndef APPCOMMAND_BRIGHTNESS_UP
+#define APPCOMMAND_BRIGHTNESS_UP     10
+#define APPCOMMAND_BRIGHTNESS_DOWN   9
+#endif
+
+//#define _WIN32_WINNT 0x0600   // Windows Vista 及以上
 
 // 版本信息
 #define MAJOR_VERSION 1
@@ -2492,6 +2511,163 @@ void CreateEthernetBackground(HWND hwnd) {\
 }\
 //废弃代码完 
 
+// ============================================================
+//  亮度控制函数
+// ============================================================
+
+// 获取物理显示器句柄
+HMONITOR GetPhysicalMonitorHandle() {
+	// 获取主显示器
+	POINT pt = {0, 0};
+	HMONITOR hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+	return hMonitor;
+}
+
+// 获取当前屏幕亮度
+// ============================================================
+//  亮度控制 (注册表读取 + WM_APPCOMMAND 10%步进)
+// ============================================================
+
+// 通过注册表读取当前屏幕亮度
+// ============================================================
+//  亮度控制 - 注册表 + 兼容方案（Dev-C++ 友好）
+// ============================================================
+
+// 通过注册表读取当前屏幕亮度
+int GetMonitorBrightness() {
+	int brightness = 80;
+	HKEY hKey;
+	
+	// 尝试多个显卡路径
+	const char* paths[] = {
+		"SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000",
+		"SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0001",
+		"SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0002",
+		NULL
+	};
+	
+	for (int i = 0; paths[i] != NULL; i++) {
+		if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, paths[i], 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+			DWORD dwValue = 0, dwSize = sizeof(DWORD);
+			if (RegQueryValueExA(hKey, "Brightness", NULL, NULL, (LPBYTE)&dwValue, &dwSize) == ERROR_SUCCESS) {
+				brightness = (int)dwValue;
+				if (brightness < 0) brightness = 0;
+				if (brightness > 100) brightness = 100;
+				RegCloseKey(hKey);
+				return brightness;
+			}
+			RegCloseKey(hKey);
+		}
+	}
+	
+	return brightness;
+}
+
+// 设置屏幕亮度 - powershell
+void SetMonitorBrightness(int level) {
+	if (level < 0) level = 0;
+	if (level > 100) level = 100;
+	
+	char cmd[512];
+	sprintf(cmd, 
+			"powershell -NoProfile -ExecutionPolicy Bypass -Command \"(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(0,%d)\"",
+			level);
+	
+	STARTUPINFOA si = {0};
+	PROCESS_INFORMATION pi = {0};
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
+	
+	CreateProcessA(NULL, cmd, NULL, NULL, FALSE, 
+				   CREATE_NO_WINDOW, NULL, NULL, &si, &pi);
+	WaitForSingleObject(pi.hProcess, 3000);
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+	
+	brightnessLevel = level;
+	DebugLog("亮度已设置为: %d%%", level);
+}
+
+// 亮度+10（增量调节）
+void BrightnessUp() {
+	int current = GetMonitorBrightness();
+	int newLevel = current + 10;
+	if (newLevel > 100) newLevel = 100;
+	brightnessLevel = newLevel;
+	SetMonitorBrightness(newLevel);
+	DebugLog("亮度增加: %d%% -> %d%%", current, newLevel);
+}
+
+// 亮度-10（增量调节）
+void BrightnessDown() {
+	int current = GetMonitorBrightness();
+	int newLevel = current - 10;
+	if (newLevel < 0) newLevel = 0;
+	brightnessLevel = newLevel;
+	SetMonitorBrightness(newLevel);
+	DebugLog("亮度减少: %d%% -> %d%%", current, newLevel);
+}
+
+//void SetMonitorBrightness(int level) {
+//	if (level < 0) level = 0;
+//	if (level > 100) level = 100;
+//	
+//	HWND hwnd = GetActiveWindow();
+//	if (!hwnd) return;
+//	
+//	// 先降到最低：BRIGHTNESS_DOWN = 9
+//	for (int i = 0; i < 10; i++) {
+//		SendMessage(hwnd, WM_APPCOMMAND, 0, (LPARAM)(25 << 16));
+//		Sleep(10);
+//	}
+//	
+//	// 再升到目标值：BRIGHTNESS_UP = 10
+//	int steps = level / 10;
+//	if (steps < 1 && level > 0) steps = 1;
+//	if (steps > 10) steps = 10;
+//	
+//	for (int i = 0; i < steps; i++) {
+//		SendMessage(hwnd, WM_APPCOMMAND, 0, (LPARAM)(26 << 16));
+//		Sleep(10);
+//	}
+//	
+//	brightnessLevel = level;
+//}
+
+// 设置屏幕亮度
+//void SetMonitorBrightness(int level) {
+//	if (level < 0) level = 0;
+//	if (level > 100) level = 100;
+//	
+//	HMONITOR hMonitor = GetPhysicalMonitorHandle();
+//	if (!hMonitor) return;
+//	
+//	DWORD dwPhysicalMonitors = 0;
+//	if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hMonitor, &dwPhysicalMonitors)) {
+//		return;
+//	}
+//	
+//	if (dwPhysicalMonitors == 0) return;
+//	
+//	PHYSICAL_MONITOR* pMonitors = (PHYSICAL_MONITOR*)malloc(dwPhysicalMonitors * sizeof(PHYSICAL_MONITOR));
+//	if (!pMonitors) return;
+//	
+//	if (!GetPhysicalMonitorsFromHMONITOR(hMonitor, dwPhysicalMonitors, pMonitors)) {
+//		free(pMonitors);
+//		return;
+//	}
+//	
+//	DWORD minBrightness, maxBrightness, currentBrightness;
+//	if (GetMonitorBrightness(pMonitors[0].hPhysicalMonitor, 
+//							 &minBrightness, &currentBrightness, &maxBrightness)) {
+//		DWORD targetBrightness = minBrightness + (DWORD)((maxBrightness - minBrightness) * level / 100);
+//		SetMonitorBrightness(pMonitors[0].hPhysicalMonitor, targetBrightness);
+//	}
+//	
+//	DestroyPhysicalMonitors(dwPhysicalMonitors, pMonitors);
+//	free(pMonitors);
+//}
 
 // ============================================================
 //  绘制阳间版安装引导界面
@@ -4694,9 +4870,9 @@ void SetSystemVolume(int level) {
 	HWND hwnd = GetActiveWindow();
 	
 	// 先完全降到0（发送25次减音量，确保到0）
-	for (int i = 0; i < 25; i++) {
+	for (int i = 0; i < 50; i++) {
 		SendMessage(hwnd, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_DOWN << 16);
-		Sleep(10);
+		Sleep(2);
 	}
 	
 	// 再升到目标值
@@ -4706,7 +4882,7 @@ void SetSystemVolume(int level) {
 	
 	for (int i = 0; i < steps; i++) {
 		SendMessage(hwnd, WM_APPCOMMAND, 0, APPCOMMAND_VOLUME_UP << 16);
-		Sleep(10);
+		Sleep(2);
 	}
 }
 
@@ -12497,6 +12673,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			volumeLevel = GetSystemVolume();
 			DebugLog("当前系统音量: %d%%", volumeLevel);
 			
+			brightnessLevel = GetMonitorBrightness();
+			DebugLog("当前屏幕亮度: %d%%", brightnessLevel);
+			
 			// ---- 强制关闭所有界面 ----
 			showFOSBeta = FALSE;
 			showBootAnimation = FALSE;
@@ -13768,12 +13947,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					}
 				}
 				
-				// 显示设置交互（点击调整亮度）
 				if (showDisplaySettings) {
 					int displayX = 94 + (STATUSBAR_ICON_SIZE + STATUSBAR_ICON_SPACING) * 2;
-					if (x >= displayX && x <= displayX + 150 && y >= 4 && y <= 84) {
+					if (x >= displayX && x <= displayX + 150 && y >= STATUSBAR_HEIGHT && y <= STATUSBAR_HEIGHT + 84) {
 						brightnessLevel = (brightnessLevel + 10) % 110;
 						if (brightnessLevel > 100) brightnessLevel = 100;
+						
+						SetMonitorBrightness(brightnessLevel);
 						InvalidateRect(hwnd, NULL, TRUE);
 						return 0;
 					}

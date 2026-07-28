@@ -11,14 +11,14 @@ ResourceIncludes =
 MakeIncludes = 
 Compiler = 
 CppCompiler = 
-Linker = -lwinmm_@@_-limm32_@@_-msacm32_@@_-ole32_@@_
+Linker = -lwinmm_@@_-limm32_@@_-msacm32_@@_-ole32_@@_ -ldxva2
 IsCpp = 1
 Icon = app.ico
 ExeOutput = 
 ObjectOutput = 
 LogOutput = 
 LogOutputEnabled = 0
-OverrideOutput = 0
+OverrideOutput = 1
 OverrideOutputName = f系统1.0.exe
 HostApplication = 
 UseCustomMakefile = 1
@@ -65,20 +65,8 @@ SyncProduct = 1
 
 
 [Unit1]
-FileName = LICENSE
-CompileCpp = 1
-Folder = 
-Compile = 0
-Link = 0
-Priority = 1000
-OverrideBuildCmd = 0
-BuildCmd = 
-FileEncoding = PROJECT
-RealEncoding = ASCII
-
-
-[Unit2]
 FileName = f1.0_private.h
+CompileCpp = 0
 Folder = 
 Compile = 0
 Link = 0
@@ -87,10 +75,9 @@ OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
 RealEncoding = UTF-8
-CompileCpp = 0
 
 
-[Unit3]
+[Unit2]
 FileName = main.cpp
 Folder = 
 Compile = 1
@@ -103,21 +90,34 @@ RealEncoding = UTF-8
 CompileCpp = 1
 
 
-[Unit4]
-FileName = f1.0_private.rc
-CompileCpp = 1
-Folder = Resources
-Compile = 1
+[Unit3]
+FileName = LICENSE
+Folder = 
+Compile = 0
 Link = 0
 Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = UTF-8
+RealEncoding = ASCII
+CompileCpp = 1
+
+
+[Unit4]
+FileName = f系统1.0.ico
+CompileCpp = 1
+Folder = 
+Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = ASCII
 
 
 [Unit5]
-FileName = Makefile.win
+FileName = test_byte_error.txt
 Folder = 
 Compile = 0
 Link = 0
@@ -130,15 +130,16 @@ CompileCpp = 0
 
 
 [Unit6]
-FileName = test_byte_error.txt
-Folder = 
-Compile = 0
+FileName = f1.0_private.rc
+Folder = Resources
+Compile = 1
 Link = 0
 Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
 RealEncoding = UTF-8
+CompileCpp = 0
 
 
 [Unit7]
@@ -155,7 +156,7 @@ CompileCpp = 0
 
 
 [Unit8]
-FileName = f系统1.0.ico
+FileName = Makefile.win
 Folder = 
 Compile = 0
 Link = 0
@@ -163,7 +164,7 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = ASCII
+RealEncoding = UTF-8
 CompileCpp = 1
 
 

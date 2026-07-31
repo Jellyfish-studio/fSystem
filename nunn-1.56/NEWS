@@ -1,0 +1,70 @@
+nunn library NEWS -- history of user-visible changes.
+Author - Antonino Calderone - <acaldmail@gmail.com> - (c) 2015, 2016
+
+Please send nunn bug reports to <acaldmail@gmail.com>.
+
+Dec 13, 2016
+* Released nunn library 1.56
+- Improve ocr_test image capture
+
+Nov 1, 2016
+* Released nunn library 1.55
+- Add counter_test
+- Refactoring
+
+Apr 1, 2016
+* Released nunn library 1.54
+- Add nunn_topo tool which exports neural network diagrams that you can draw using Graphviz dot
+- Bug fixes and improvements
+
+Oct 10, 2015
+* Released nunn library 1.53
+- Bug fixes and improvements
+
+Oct 3, 2015
+* Released nunn library 1.52
+- Add hopfield neural network
+- Add hopfield neural network sample application
+
+Sep 30, 2015
+* Released nunn library 1.51
+- Add recurrent MLP network
+- Rebuild using VS2015 (you may need VS2015 redist)
+
+Sep 11, 2015
+* Released nunn library 1.50 
+- Add perceptron
+- Add perceptron_and sample
+- Bug fixes and improvements
+
+Sep 4, 2015
+* Released nunn library 1.48.1 
+- Add xor function sample
+- Bug fixes and improvements
+
+Sep 2, 2015
+* Released nunn library 1.48 
+- Add cross entropy cost function support
+- Bug fixes and improvements
+
+Sep 1, 2015
+* Released nunn library 1.47 
+- Bug fixes and improvements
+
+Aug 30, 2015
+* Released nunn library 1.46 
+- Bug fixes and improvements
+
+Aug 28, 2015
+* Released nunn library 1.45 
+- Added winttt sample
+
+Aug 13, 2015
+* Released nunn library 1.44 
+- Added Tic Tac Toe sample
+
+Jul 23, 2015
+* Released nunn library 1.43 for Windows and Linux
+
+Jun 1, 2015
+* Released nunn library 1.0 for Windows

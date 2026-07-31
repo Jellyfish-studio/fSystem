@@ -6,18 +6,22 @@ CC       = "gcc.exe"
 WINDRES  = "windres.exe"
 RM       = del /q /f
 CD       = cd /d
-LIBS     = "-s" "-mwindows" "-lwinmm" "-limm32" "-static" "-ldxva2" "-ldxva2" "-luser32" "-lole32"
+LIBS     = "-s" "-mwindows" "-lwinmm" "-limm32" "-static" "-ldxva2" "-ldxva2" "-luser32" "-lole32" "-static-libgcc" "-static-libstdc++"
 INCS     = 
-CXXINCS  = 
+CXXINCS  = -I"nunn-1.56\nunn"
 CXXFLAGS = $(CXXINCS) "-std=c++17"
 CFLAGS   = $(INCS) 
 NASM_FLAGS   =  "-f" "elf64"
 WINDRESFLAGS = 
 RES      = f1.0_private.res
-OBJ      = main.o $(RES)
+
+# Nunn 库的 .o 文件
+NUNN_OBJ = nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o
+
+OBJ      = main.o $(NUNN_OBJ) $(RES)
 BIN      = fϵͳ1.0.exe
-LINKOBJ  = "main.o" "f1.0_private.res"
-CLEANOBJ = "main.o" "f1.0_private.res" "fϵͳ1.0.exe"
+LINKOBJ  = "main.o" "nu_mlpnn.o" "nu_rmlpnn.o" "nu_perceptron.o" "nu_hopfieldnn.o" "nu_costfuncs.o" "f1.0_private.res"
+CLEANOBJ = "main.o" "nu_mlpnn.o" "nu_rmlpnn.o" "nu_perceptron.o" "nu_hopfieldnn.o" "nu_costfuncs.o" "f1.0_private.res" "fϵͳ1.0.exe"
 
 .PHONY: all all-before all-after clean clean-custom
 
@@ -27,12 +31,25 @@ clean: clean-custom
 	-$(RM) $(CLEANOBJ) >NUL 2>&1
 
 fϵͳ1.0.exe: $(OBJ)
-
 	$(CXX) $(LINKOBJ) -o "fϵͳ1.0.exe" $(LIBS)
 
 main.o: main.cpp
-	$(CXX) -c "main.cpp" -o "main.o" $(CXXFLAGS)  -finput-charset=UTF-8 -fexec-charset=gbk
+	$(CXX) -c "main.cpp" -o "main.o" $(CXXFLAGS) -finput-charset=UTF-8 -fexec-charset=gbk
 
-fϵͳ1.0_private.res: f1.0_private.rc f1.0_private.rc 
-	$(WINDRES) -i "f1.0_private.rc" --input-format=rc -o "f1.0_private.res" -O coff $(WINDRESFLAGS) 
+nu_mlpnn.o: nunn-1.56/nunn/nu_mlpnn.cc
+	$(CXX) -c "nunn-1.56/nunn/nu_mlpnn.cc" -o "nu_mlpnn.o" $(CXXFLAGS)
 
+nu_rmlpnn.o: nunn-1.56/nunn/nu_rmlpnn.cc
+	$(CXX) -c "nunn-1.56/nunn/nu_rmlpnn.cc" -o "nu_rmlpnn.o" $(CXXFLAGS)
+
+nu_perceptron.o: nunn-1.56/nunn/nu_perceptron.cc
+	$(CXX) -c "nunn-1.56/nunn/nu_perceptron.cc" -o "nu_perceptron.o" $(CXXFLAGS)
+
+nu_hopfieldnn.o: nunn-1.56/nunn/nu_hopfieldnn.cc
+	$(CXX) -c "nunn-1.56/nunn/nu_hopfieldnn.cc" -o "nu_hopfieldnn.o" $(CXXFLAGS)
+
+nu_costfuncs.o: nunn-1.56/nunn/nu_costfuncs.cc
+	$(CXX) -c "nunn-1.56/nunn/nu_costfuncs.cc" -o "nu_costfuncs.o" $(CXXFLAGS)
+
+f1.0_private.res: f1.0_private.rc
+	$(WINDRES) -i "f1.0_private.rc" --input-format=rc -o "f1.0_private.res" -O coff $(WINDRESFLAGS)

@@ -43,6 +43,7 @@
 //27/07/26 12:00:亮度调节真实实现
 //28/07/26 14:00:修复了亮度调节的bug
 //28/07/26 20:08:文件管理器支持PgUp和PgDn进行调整显示行数位置
+//31/07/36 12:01:实现了AI训练器，使用nunn库，但出现了编译器无法编译状况，需使用专门的编译bat文件（跟目录有），暂未支持输入中文（只支持数字），训练文件暂时为存储进本地，版本bete1
 
 #include <windows.h>
 #include <string.h>
@@ -58,6 +59,9 @@
 #include <powrprof.h>        // 电源管理API
 #include <physicalmonitorenumerationapi.h>  // 物理显示器
 #include <highlevelmonitorconfigurationapi.h>  // 显示器配置
+
+#include <map>      // 添加这一行
+#include <sstream>  // 如果还没有
 
 //#define WINVER 0x0600
 //#define _WIN32_WINNT 0x0600
@@ -78,6 +82,14 @@
 #pragma comment(lib, "ole32.lib")
 #include <physicalmonitorenumerationapi.h>
 #include <highlevelmonitorconfigurationapi.h>
+
+// ==================== AI模块 ====================
+// 直接使用Nunn库
+#include "nu_mlpnn.h"
+#include "nu_rmlpnn.h"
+#include "nu_perceptron.h"
+#include "nu_trainer.h"
+#include "nu_vector.h"
 
 // 添加兼容性定义
 #ifndef CP_ACP
@@ -648,6 +660,36 @@ static BOOL isCalendarPressed = FALSE;
 static BOOL isClockHovered = FALSE;
 static BOOL isClockPressed = FALSE;
 
+// ==================== AI助手窗口变量 ====================
+static BOOL showAIWindow = FALSE;
+static char aiInput[200] = "";
+static char aiOutput[2000] = "欢迎使用守慧AI助手！\n输入数字(逗号分隔)测试预测\n输入 'train' 进入训练模式\n输入 'quit' 退出";
+static char aiStatus[200] = "AI助手已就绪";
+static char aiTrainData[5000] = "";
+static BOOL aiTrainingMode = FALSE;
+
+// ==================== AI网络变量 ====================
+static nu::mlp_neural_net_t* g_aiNetwork = NULL;
+static BOOL g_aiInitialized = FALSE;
+static std::vector<std::string> g_aiTrainingHistory;
+static double g_aiLastConfidence = 0.0;
+static std::string g_aiModelName = "守慧AI";
+
+// AI配置结构
+struct AITrainingConfig {
+	int inputSize;
+	int outputSize;
+	std::vector<int> hiddenLayers;
+	double learningRate;
+	double momentum;
+	
+	AITrainingConfig() : inputSize(8), outputSize(8), learningRate(0.3), momentum(0.9) {
+		hiddenLayers.push_back(16);
+		hiddenLayers.push_back(16);
+		hiddenLayers.push_back(8);
+	}
+};
+
 // ============================================================
 //  状态栏和开始菜单 - 全局变量
 // ============================================================
@@ -705,6 +747,7 @@ static const StartMenuItem startMenuItems[] = {
 	{L"\U0001F41B", L"Bug报告", "bugreport", FALSE},
 	{L"\U0001F4C5", L"日历", "calendar", FALSE},
 	{L"\U0001F551", L"时钟", "clock", FALSE},
+	{L"\U0001F9E0", L"AI助手", "ai", FALSE},    // ← 添加这一行
 	{L"", L"", "", TRUE},
 	{L"\U0001F512", L"关机", "shutdown", FALSE}
 };
@@ -1319,6 +1362,188 @@ void DrawNotificationPanel(HDC hdc, int x, int y);
 void AddNotification(const char* message);
 
 
+// ==================== AI函数实现 ====================
+
+// 初始化AI
+BOOL InitAI(const AITrainingConfig& config) {
+	try {
+		if (g_aiNetwork) {
+			delete g_aiNetwork;
+			g_aiNetwork = NULL;
+		}
+		
+		nu::mlp_neural_net_t::topology_t topology;
+		topology.push_back(config.inputSize);
+		for (size_t i = 0; i < config.hiddenLayers.size(); ++i) {
+			topology.push_back(config.hiddenLayers[i]);
+		}
+		topology.push_back(config.outputSize);
+		
+		g_aiNetwork = new nu::mlp_neural_net_t(topology, config.learningRate, config.momentum);
+		g_aiInitialized = TRUE;
+		g_aiModelName = "守慧AI";
+		return TRUE;
+	} catch (...) {
+		g_aiInitialized = FALSE;
+		return FALSE;
+	}
+}
+
+// 从字符串训练
+BOOL TrainAIFromString(const std::string& data) {
+	if (!g_aiInitialized || g_aiNetwork == NULL) return FALSE;
+	
+	try {
+		std::map<nu::mlp_neural_net_t::rvector_t, nu::mlp_neural_net_t::rvector_t> trainingSet;
+		std::stringstream ss(data);
+		std::string line;
+		
+		while (std::getline(ss, line)) {
+			if (line.empty()) continue;
+			
+			size_t sep = line.find('|');
+			if (sep == std::string::npos) continue;
+			
+			std::string inputStr = line.substr(0, sep);
+			std::string targetStr = line.substr(sep + 1);
+			
+			nu::mlp_neural_net_t::rvector_t input, target;
+			std::stringstream ss1(inputStr);
+			std::string token;
+			while (std::getline(ss1, token, ',')) {
+				if (!token.empty()) {
+					input.push_back(atof(token.c_str()));
+				}
+			}
+			
+			std::stringstream ss2(targetStr);
+			while (std::getline(ss2, token, ',')) {
+				if (!token.empty()) {
+					target.push_back(atof(token.c_str()));
+				}
+			}
+			
+			if (!input.empty() && !target.empty()) {
+				trainingSet[input] = target;
+				g_aiTrainingHistory.push_back(line);
+			}
+		}
+		
+		if (trainingSet.empty()) return FALSE;
+		
+		nu::mlp_nn_trainer_t trainer(*g_aiNetwork, 1000, 0.01);
+		for (auto& sample : trainingSet) {
+			auto cost_func = [](nu::mlp_neural_net_t& net, const nu::mlp_neural_net_t::rvector_t& target) -> double {
+				nu::mlp_neural_net_t::rvector_t output;
+				net.get_outputs(output);  // 传入引用
+				double error = 0.0;
+				for (size_t i = 0; i < output.size() && i < target.size(); ++i) {
+					double diff = output[i] - target[i];
+					error += diff * diff;
+				}
+				return error / output.size();
+			};
+			trainer.train(sample.first, sample.second, cost_func);
+		}
+		
+		return TRUE;
+	} catch (...) {
+		return FALSE;
+	}
+}
+
+// 预测
+std::vector<double> PredictAI(const std::vector<double>& input) {
+	std::vector<double> result;
+	if (!g_aiInitialized || !g_aiNetwork) return result;
+	
+	try {
+		nu::mlp_neural_net_t::rvector_t nuInput;
+		for (double v : input) {
+			nuInput.push_back(v);
+		}
+		
+		g_aiNetwork->set_inputs(nuInput);
+		g_aiNetwork->feed_forward();
+		
+		nu::mlp_neural_net_t::rvector_t output;
+		g_aiNetwork->get_outputs(output);
+		
+		for (double v : output) {
+			result.push_back(v);
+		}
+		
+		double maxVal = 0.0;
+		for (double v : result) {
+			if (fabs(v) > maxVal) maxVal = fabs(v);
+		}
+		g_aiLastConfidence = maxVal;
+		
+		return result;
+	} catch (...) {
+		return result;
+	}
+}
+
+// 预测标签
+std::string PredictLabelAI(const std::vector<double>& input) {
+	std::vector<double> output = PredictAI(input);
+	if (output.empty()) return "未知";
+	
+	int maxIndex = 0;
+	double maxVal = output[0];
+	for (size_t i = 1; i < output.size(); ++i) {
+		if (output[i] > maxVal) {
+			maxVal = output[i];
+			maxIndex = i;
+		}
+	}
+	
+	const char* labels[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"};
+	if (maxIndex < 10) {
+		return labels[maxIndex];
+	}
+	return "类别" + std::to_string(maxIndex);
+}
+
+// 获取置信度
+double GetAIConfidence() {
+	return g_aiLastConfidence;
+}
+
+// AI是否就绪
+BOOL IsAIReady() {
+	return g_aiInitialized;
+}
+
+// 获取AI信息
+std::string GetAIInfo() {
+	if (!g_aiInitialized || !g_aiNetwork) {
+		return "AI未初始化";
+	}
+	
+	std::stringstream ss;
+	nu::mlp_neural_net_t::topology_t topology = g_aiNetwork->get_topology();
+	ss << "模型: " << g_aiModelName << " | 结构: ";
+	for (size_t i = 0; i < topology.size(); ++i) {
+		ss << topology[i];
+		if (i < topology.size() - 1) ss << "-";
+	}
+	ss << " | 训练样本: " << g_aiTrainingHistory.size();
+	return ss.str();
+}
+
+// 重置AI
+void ResetAI() {
+	if (g_aiNetwork) {
+		delete g_aiNetwork;
+		g_aiNetwork = NULL;
+	}
+	g_aiInitialized = FALSE;
+	g_aiTrainingHistory.clear();
+	g_aiLastConfidence = 0.0;
+}
+
 // ============================================================
 //  新增：任务栏图标功能 - 函数实现
 // ============================================================
@@ -1868,6 +2093,138 @@ void DrawClock(HDC hdc, int centerX, int centerY) {
 	hOldFont = (HFONT)SelectObject(hdc, hHintFont);
 	SetTextColor(hdc, RGB(150, 150, 150));
 	TextOut(hdc, clockRect.left + 10, clockRect.bottom - 25, "按ESC键关闭", 10);
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hHintFont);
+}
+
+// ==================== AI助手窗口绘制 ====================
+void DrawAIWindow(HDC hdc, int centerX, int centerY) {
+	RECT aiRect = {centerX - 350, centerY - 250, centerX + 350, centerY + 250};
+	
+	// 背景
+	HBRUSH hBgBrush = CreateSolidBrush(RGB(240, 248, 255));
+	FillRect(hdc, &aiRect, hBgBrush);
+	DeleteObject(hBgBrush);
+	
+	// 边框
+	HPEN hBorderPen = CreatePen(PS_SOLID, 2, RGB(100, 100, 200));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, aiRect.left, aiRect.top, aiRect.right, aiRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	// 标题栏
+	RECT titleRect = {aiRect.left, aiRect.top, aiRect.right, aiRect.top + 40};
+	HBRUSH hTitleBrush = CreateSolidBrush(RGB(70, 130, 180));
+	FillRect(hdc, &titleRect, hTitleBrush);
+	DeleteObject(hTitleBrush);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	
+	HFONT hTitleFont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+	
+	TextOut(hdc, aiRect.left + 10, aiRect.top + 8, "AI助手 - 守慧", 11);
+	DrawShouhuiMascot(hdc, aiRect.right - 50, aiRect.top - 5, 40);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTitleFont);
+	
+	// 状态信息
+	HFONT hStatusFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	hOldFont = (HFONT)SelectObject(hdc, hStatusFont);
+	
+	SetTextColor(hdc, RGB(0, 0, 0));
+	TextOut(hdc, aiRect.left + 20, aiRect.top + 50, aiStatus, strlen(aiStatus));
+	
+	// 模型信息
+	if (IsAIReady()) {
+		std::string info = GetAIInfo();
+		TextOut(hdc, aiRect.left + 20, aiRect.top + 75, info.c_str(), info.length());
+	}
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hStatusFont);
+	
+	// 输出区域
+	RECT outputRect = {aiRect.left + 20, aiRect.top + 105, aiRect.right - 20, aiRect.top + 200};
+	HBRUSH hOutputBrush = CreateSolidBrush(RGB(255, 255, 255));
+	FillRect(hdc, &outputRect, hOutputBrush);
+	DeleteObject(hOutputBrush);
+	
+	HPEN hOutputPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
+	hOldPen = (HPEN)SelectObject(hdc, hOutputPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, outputRect.left, outputRect.top, outputRect.right, outputRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hOutputPen);
+	
+	SetTextColor(hdc, RGB(0, 0, 0));
+	HFONT hOutputFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								   DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	hOldFont = (HFONT)SelectObject(hdc, hOutputFont);
+	
+	RECT textRect = {outputRect.left + 5, outputRect.top + 5, 
+		outputRect.right - 5, outputRect.bottom - 5};
+	DrawText(hdc, aiOutput, -1, &textRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hOutputFont);
+	
+	// 输入框
+	RECT inputRect = {aiRect.left + 20, aiRect.bottom - 80, aiRect.right - 20, aiRect.bottom - 40};
+	HBRUSH hInputBrush = CreateSolidBrush(RGB(255, 255, 255));
+	FillRect(hdc, &inputRect, hInputBrush);
+	DeleteObject(hInputBrush);
+	
+	HPEN hInputPen = CreatePen(PS_SOLID, 1, RGB(200, 200, 200));
+	hOldPen = (HPEN)SelectObject(hdc, hInputPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, inputRect.left, inputRect.top, inputRect.right, inputRect.bottom);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hInputPen);
+	
+	SetTextColor(hdc, RGB(0, 0, 0));
+	HFONT hInputFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	hOldFont = (HFONT)SelectObject(hdc, hInputFont);
+	
+	TextOut(hdc, inputRect.left + 5, inputRect.top + 8, ">", 1);
+	TextOut(hdc, inputRect.left + 20, inputRect.top + 8, aiInput, strlen(aiInput));
+	
+	// 光标闪烁
+	static DWORD lastBlink = GetTickCount();
+	static BOOL showCursor = TRUE;
+	if (GetTickCount() - lastBlink > 500) {
+		showCursor = !showCursor;
+		lastBlink = GetTickCount();
+	}
+	if (showCursor) {
+		int textWidth = GetTextWidth(hdc, aiInput);
+		MoveToEx(hdc, inputRect.left + 20 + textWidth, inputRect.top + 10, NULL);
+		LineTo(hdc, inputRect.left + 20 + textWidth, inputRect.top + 30);
+	}
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hInputFont);
+	
+	// 底部提示
+	HFONT hHintFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								 DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+	hOldFont = (HFONT)SelectObject(hdc, hHintFont);
+	SetTextColor(hdc, RGB(150, 150, 150));
+	TextOut(hdc, aiRect.left + 20, aiRect.bottom - 30, 
+			"输入数据(逗号分隔)按Enter预测 | 'train'训练模式 | ESC关闭", 48);
+	
 	SelectObject(hdc, hOldFont);
 	DeleteObject(hHintFont);
 }
@@ -9981,6 +10338,9 @@ void DrawDesktop(HDC hdc, RECT rect) {
 	if (showClock) {
 		DrawClock(hdc, appCenterX, appCenterY);
 	}
+	if (showAIWindow) {
+		DrawAIWindow(hdc, rect.right / 2, rect.bottom / 2);
+	}
 	
 	// ============================================================
 	//  3. 弹出面板已经在 DrawStatusBar 中绘制了，不在这里重复绘制
@@ -10900,6 +11260,7 @@ void CloseAllApps(HWND hwnd) {
 	showSpecialMessage = FALSE;
 	showFinalEgg = FALSE;
 	showBugReporter = FALSE;
+	showAIWindow = FALSE;
 	specialMessageScrollY = 0;
 	if (hwnd) {
 		InvalidateRect(hwnd, NULL, TRUE);
@@ -12659,6 +13020,24 @@ void ExecuteStartMenuItem(const char* command) {
 		DebugLog("ExecuteStartMenuItem: 打开时钟");
 		ShowClock(hwnd);
 	}
+	// ========== 新增AI ==========
+	else if (strcmp(command, "ai") == 0) {
+		DebugLog("ExecuteStartMenuItem: 打开AI助手");
+		CloseAllApps(hwnd);
+		
+		// 初始化AI
+		if (!IsAIReady()) {
+			AITrainingConfig config;
+			InitAI(config);
+			strcpy(aiStatus, "AI已就绪，输入数据测试");
+			strcpy(aiOutput, "欢迎使用守慧AI助手！\n输入数字(逗号分隔)测试预测\n输入 'train' 进入训练模式");
+			DebugLog("AI模块初始化成功");
+		}
+		
+		showAIWindow = TRUE;
+		InvalidateRect(hwnd, NULL, TRUE);
+	}
+	
 	else if (strcmp(command, "shutdown") == 0) {
 		DebugLog("ExecuteStartMenuItem: 关机");
 		ShutdownSystem(hwnd);
@@ -12667,7 +13046,6 @@ void ExecuteStartMenuItem(const char* command) {
 		DebugLog("ExecuteStartMenuItem: 未知命令 %s", command);
 	}
 }
-
 // ============================================================
 //  添加通知
 // ============================================================
@@ -13106,6 +13484,117 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 				return 0;
 			}
 			
+			// ========== AI助手输入处理（放在最前面，优先处理） ==========
+			if (showAIWindow) {
+				char key = (char)wParam;
+				
+				if (key == 27) { // ESC关闭
+					showAIWindow = FALSE;
+					strcpy(aiInput, "");
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				else if (key == 8) { // Backspace
+					if (strlen(aiInput) > 0) {
+						aiInput[strlen(aiInput) - 1] = '\0';
+					}
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				else if (key == 13) { // Enter
+					// 退出命令
+					if (strcmp(aiInput, "quit") == 0 || strcmp(aiInput, "exit") == 0) {
+						showAIWindow = FALSE;
+						strcpy(aiInput, "");
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 训练模式
+					if (strcmp(aiInput, "train") == 0) {
+						aiTrainingMode = TRUE;
+						strcpy(aiTrainData, "");
+						strcpy(aiOutput, "训练模式已开启\n请输入训练数据，格式: 输入1,输入2|输出1,输出2\n输入 'done' 结束训练");
+						strcpy(aiStatus, "训练模式 - 等待数据");
+						strcpy(aiInput, "");
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 训练数据收集
+					if (aiTrainingMode) {
+						if (strcmp(aiInput, "done") == 0) {
+							aiTrainingMode = FALSE;
+							// 执行训练
+							if (TrainAIFromString(aiTrainData)) {
+								strcpy(aiOutput, "训练完成！模型已更新\n输入数字测试预测");
+								strcpy(aiStatus, "训练完成");
+							} else {
+								strcpy(aiOutput, "训练失败，请检查数据格式\n格式: 0.5,0.3|0.8,0.2");
+								strcpy(aiStatus, "训练失败");
+							}
+							strcpy(aiTrainData, "");
+							strcpy(aiInput, "");
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+						// 收集训练数据
+						if (strlen(aiTrainData) + strlen(aiInput) + 2 < 5000) {
+							strcat(aiTrainData, aiInput);
+							strcat(aiTrainData, "\n");
+						}
+						sprintf(aiOutput, "已添加训练样本: %s\n继续输入，或输入 'done' 结束", aiInput);
+						strcpy(aiInput, "");
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 预测模式
+					std::vector<double> input;
+					std::stringstream ss(aiInput);
+					std::string token;
+					while (std::getline(ss, token, ',')) {
+						if (!token.empty()) {
+							input.push_back(atof(token.c_str()));
+						}
+					}
+					
+					if (!input.empty() && IsAIReady()) {
+						std::vector<double> output = PredictAI(input);
+						std::string result = "输入: " + std::string(aiInput) + "\n输出: ";
+						for (size_t i = 0; i < output.size(); ++i) {
+							char buf[20];
+							sprintf(buf, "%.4f", output[i]);
+							result += buf;
+							if (i < output.size() - 1) result += ", ";
+						}
+						result += "\n标签: " + PredictLabelAI(input);
+						result += " | 置信度: " + std::to_string(GetAIConfidence());
+						strcpy(aiOutput, result.c_str());
+						strcpy(aiStatus, "预测完成");
+					} else if (!input.empty() && !IsAIReady()) {
+						strcpy(aiOutput, "AI未就绪，请先训练\n输入 'train' 进入训练模式");
+						strcpy(aiStatus, "未就绪");
+					} else {
+						strcpy(aiOutput, "请输入有效的数字(逗号分隔)\n例如: 0.5,0.3,0.8");
+						strcpy(aiStatus, "等待输入");
+					}
+					strcpy(aiInput, "");
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				else if (key >= 32 && key <= 126 && strlen(aiInput) < 199) {
+					// 普通字符输入
+					int len = strlen(aiInput);
+					aiInput[len] = key;
+					aiInput[len + 1] = '\0';
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+				return 0;
+			}
+			// ========== AI助手输入处理结束 ==========
+			
 			if (showCDKeyScreen) {
 				HandleCDKeyInput((char)wParam);
 				InvalidateRect(hwnd, NULL, TRUE);
@@ -13145,7 +13634,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			else if (showCalendar) {
 				HandleCalendarInput((char)wParam);
 				InvalidateRect(hwnd, NULL, TRUE);
-			}else if (showClock) {
+			}
+			else if (showClock) {
 				HandleClockInput((char)wParam);
 				InvalidateRect(hwnd, NULL, TRUE);
 			}

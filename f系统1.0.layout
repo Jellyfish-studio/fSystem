@@ -1,7 +1,7 @@
 [
     {
-        "caretX": 97,
-        "caretY": 55,
+        "caretX": 1,
+        "caretY": 29,
         "filename": "C:/Users/ning/Desktop/GitHub/fSystem/Makefile.win",
         "focused": false,
         "isOpen": true,
@@ -20,14 +20,14 @@
         "top": 0
     },
     {
-        "caretX": 1,
-        "caretY": 64,
+        "caretX": 97,
+        "caretY": 46,
         "filename": "C:/Users/ning/Desktop/GitHub/fSystem/main.cpp",
         "focused": true,
         "isOpen": true,
         "left": 0,
         "order": 0,
-        "top": 1260
+        "top": 420
     },
     {
         "caretX": 1,

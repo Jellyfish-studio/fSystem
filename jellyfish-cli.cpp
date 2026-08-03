@@ -2,6 +2,7 @@
 // Jellyfish Studio Command Line Tool
 // English version with config file support
 
+#include <winternl.h>  // 或者定义 RTL_OSVERSIONINFOW 结构
 #include <iostream>
 #include <cstdlib>
 #include <fstream>
@@ -431,12 +432,35 @@ void showUsername() {
 }
 
 void showWindowsVersion() {
-    OSVERSIONINFOEXA osvi;
-    ZeroMemory(&osvi, sizeof(OSVERSIONINFOEXA));
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
-    GetVersionExA((LPOSVERSIONINFOA)&osvi);
-    std::cout << "Windows " << osvi.dwMajorVersion << "." << osvi.dwMinorVersion
-              << " (Build " << osvi.dwBuildNumber << ")" << std::endl;
+    // 方法1: 使用 RtlGetVersion (推荐)
+    typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+    HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
+    if (hNtdll) {
+        RtlGetVersionPtr RtlGetVersion = (RtlGetVersionPtr)GetProcAddress(hNtdll, "RtlGetVersion");
+        if (RtlGetVersion) {
+            RTL_OSVERSIONINFOW osvi = {0};
+            osvi.dwOSVersionInfoSize = sizeof(osvi);
+            if (RtlGetVersion(&osvi) == 0) {
+                std::cout << "Windows " << osvi.dwMajorVersion << "." << osvi.dwMinorVersion
+                          << " (Build " << osvi.dwBuildNumber << ")" << std::endl;
+                return;
+            }
+        }
+    }
+    
+    // 方法2: 从注册表读取 (备用)
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, 
+        "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 
+        0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        char productName[256] = {0};
+        DWORD size = sizeof(productName);
+        if (RegQueryValueExA(hKey, "ProductName", NULL, NULL, 
+            (LPBYTE)productName, &size) == ERROR_SUCCESS) {
+            std::cout << productName << std::endl;
+        }
+        RegCloseKey(hKey);
+    }
 }
 
 // ============================================================

@@ -6,7 +6,7 @@ CC       = "gcc.exe"
 WINDRES  = "windres.exe"
 RM       = del /q /f
 CD       = cd /d
-LIBS     = "-s" "-mwindows" "-lwinmm" "-limm32" "-static" "-ldxva2" "-ldxva2" "-luser32" "-lole32" "-static-libgcc" "-static-libstdc++"
+LIBS     = "-s" "-mwindows" "-lwinmm" "-limm32" "-static" "-ldxva2" "-ldxva2" "-luser32" "-lole32" "-lwlanapi" "-liphlpapi" "-static-libgcc" "-static-libstdc++"
 INCS     = 
 CXXINCS  = -I"nunn-1.56\nunn"
 CXXFLAGS = $(CXXINCS) "-std=c++17"

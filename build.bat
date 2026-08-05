@@ -3,6 +3,10 @@ chcp 65001 >nul
 echo ========================================
 echo f系统1.0 编译脚本
 echo ========================================
+echo 果冻鱼工作室 f系统1.0 官方编译脚本
+echo 水母严选，必是佳品
+echo 准备完成！
+echo ========================================
 echo.
 
 set "GXX=C:\Program Files\RedPanda-Cpp\mingw64\bin\g++.exe"
@@ -34,7 +38,7 @@ echo [6/7] 编译 nu_costfuncs.cc...
 if errorlevel 1 goto error
 
 echo [7/7] 链接生成 f系统1.0.exe...
-"%GXX%" main.o nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o f1.0_private.res -o "f系统1.0.exe" -mwindows -lwinmm -limm32 -lole32 -static -static-libgcc -static-libstdc++
+"%GXX%" main.o nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o f1.0_private.res -o "f系统1.0.exe" -mwindows -lwinmm -limm32 -lole32 -lwlanapi -liphlpapi -static -static-libgcc -static-libstdc++
 if errorlevel 1 goto error
 
 echo.

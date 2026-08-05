@@ -38,12 +38,14 @@
 //21/07/26 19:01:正式成立Jellyfish-studio位于GitHub上
 //21/07/26 19:01:新的安装流程（在cdkey验证后进入幻灯片）
 //21/07/26 19:01:目前音乐和图片正在制作
-//24/07/26 12:00:上方任务栏重新设置(beta1版本)原先按钮碰撞箱未删除
+//24/07/26 12:00:上方任务栏重新设置(bete1版本),原先按钮碰撞箱未删除
 //25/07/26 23:59:音量调节真实实现
 //27/07/26 12:00:亮度调节真实实现
 //28/07/26 14:00:修复了亮度调节的bug
 //28/07/26 20:08:文件管理器支持PgUp和PgDn进行调整显示行数位置
-//31/07/36 12:01:实现了AI训练器，使用nunn库，但出现了编译器无法编译状况，需使用专门的编译bat文件（跟目录有），暂未支持输入中文（只支持数字），训练文件暂时为存储进本地，版本bete1
+//31/07/26 12:01:实现了AI训练器，使用nunn库，但出现了编译器无法编译状况，需使用专门的编译bat文件（跟目录有），暂未支持输入中文（只支持数字），训练文件暂时为存储进本地，版本bete1
+//05/08/26 19:04:时钟回归(任务栏版本bete2),碰撞箱未修复
+//05/08/26 20:11:网络调节真实实现
 
 #include <windows.h>
 #include <string.h>
@@ -59,9 +61,12 @@
 #include <powrprof.h>        // 电源管理API
 #include <physicalmonitorenumerationapi.h>  // 物理显示器
 #include <highlevelmonitorconfigurationapi.h>  // 显示器配置
+#include <iphlpapi.h>
 
-#include <map>      // 添加这一行
+#include <map>      
 #include <sstream>  // 如果还没有
+
+#include <wlanapi.h>
 
 //#define WINVER 0x0600
 //#define _WIN32_WINNT 0x0600
@@ -173,7 +178,30 @@
 #define STATUSBAR_ICON_SIZE 20
 #define STATUSBAR_ICON_SPACING 8
 
+// WLAN API 相关定义
+#ifndef WLAN_AVAILABLE_NETWORK_CONNECTED
+#define WLAN_AVAILABLE_NETWORK_CONNECTED 0x00000001
+#endif
+
+#ifndef dot11_BSS_type_infrastructure
+#define dot11_BSS_type_infrastructure 1
+#endif
+
+#ifndef wlan_connection_mode_profile
+#define wlan_connection_mode_profile 1
+#endif
+
+// 密码存储文件
+#define WIFI_PASSWORD_FILE "wifi_passwords.dat"
+
 using namespace std; // 使用std命名空间
+
+// 网络操作函数声明
+void PerformNetworkScan();
+BOOL ConnectToNetwork(const char* ssid, const char* password);
+void GetNetworkIPInfo(const char* ssid);
+BOOL GetSavedPassword(const char* ssid, char* password, int passwordSize);
+void SavePassword(const char* ssid, const char* password);
 
 // ============================================================
 //  阳间版启动动画状态
@@ -265,6 +293,10 @@ extern "C" {
 }
 #endif
 
+// 在全局变量区域添加（约第 200 行附近）
+static BOOL isNetworkConnected = FALSE;  // 网络连接状态
+static char networkStatus[20] = "未连接"; // 网络状态文本
+
 // ==================== 字节错误检测标志 ====================
 static BOOL g_checkByteError = TRUE;  // 默认启用字节错误检测
 
@@ -303,6 +335,47 @@ typedef struct _ButtonInfo {
 
 static ButtonInfo g_buttons[20];
 static int g_buttonCount = 0;
+
+// ==================== 网络配置模块 ====================
+typedef struct {
+	char ssid[100];
+	char password[100];
+	BOOL dhcpEnabled;
+	char ipAddress[20];
+	char subnetMask[20];
+	char gateway[20];
+	char dns1[20];
+	char dns2[20];
+	BOOL connected;
+	int signalStrength;
+	DWORD lastUpdateTime;
+} NetworkConfig;
+
+static NetworkConfig g_networkConfig = {
+	.ssid = "",
+	.password = "",
+	.dhcpEnabled = TRUE,
+	.ipAddress = "0.0.0.0",
+	.subnetMask = "255.255.255.0",
+	.gateway = "0.0.0.0",
+	.dns1 = "8.8.8.8",
+	.dns2 = "8.8.4.4",
+	.connected = FALSE,
+	.signalStrength = 0,
+	.lastUpdateTime = 0
+};
+
+// 网络对话框状态
+static BOOL showNetworkConfigDialog = FALSE;
+static char wifiSSIDInput[100] = "";
+static char wifiPasswordInput[100] = "";
+static BOOL isWifiPasswordMode = FALSE;
+static char networkScanResults[20][100];
+static int networkScanCount = 0;
+static int selectedNetworkIndex = -1;
+static int networkDialogFocus = 0; // 0:列表 1:密码输入
+static char connectStatusMsg[100] = "";
+static DWORD connectStatusTime = 0;
 
 // ============================================================
 //  阳间版安装引导状态
@@ -551,6 +624,478 @@ void* DebugRealloc(void* ptr, size_t size, const char* file, int line) {
 #define REALLOC(ptr, size) DebugRealloc(ptr, size, __FILE__, __LINE__)
 #define FREE(ptr) DebugFree(ptr)
 
+// ============================================================
+//  真实网络扫描函数 - 使用 Windows WLAN API
+// ============================================================
+void PerformNetworkScan() {
+	networkScanCount = 0;
+	g_networkConfig.connected = FALSE;
+	isNetworkConnected = FALSE;
+	
+	HMODULE hWlanApi = LoadLibraryA("wlanapi.dll");
+	if (!hWlanApi) {
+		DebugLog("错误: 无法加载 wlanapi.dll");
+		return;
+	}
+	
+	// 定义函数指针
+	typedef DWORD (WINAPI *WlanOpenHandle_t)(DWORD, PVOID, DWORD*, PHANDLE);
+	typedef DWORD (WINAPI *WlanEnumInterfaces_t)(HANDLE, PVOID, PWLAN_INTERFACE_INFO_LIST*);
+	typedef DWORD (WINAPI *WlanScan_t)(HANDLE, const GUID*, PVOID, PVOID);
+	typedef DWORD (WINAPI *WlanGetAvailableNetworkList_t)(HANDLE, const GUID*, DWORD, PVOID, PWLAN_AVAILABLE_NETWORK_LIST*);
+	typedef DWORD (WINAPI *WlanFreeMemory_t)(PVOID);
+	typedef DWORD (WINAPI *WlanCloseHandle_t)(HANDLE, PVOID);
+	typedef DWORD (WINAPI *WlanQueryInterface_t)(HANDLE, const GUID*, WLAN_INTF_OPCODE, PVOID, PDWORD, PVOID*, PWLAN_OPCODE_VALUE_TYPE*);
+	
+	WlanOpenHandle_t pWlanOpenHandle = (WlanOpenHandle_t)GetProcAddress(hWlanApi, "WlanOpenHandle");
+	WlanEnumInterfaces_t pWlanEnumInterfaces = (WlanEnumInterfaces_t)GetProcAddress(hWlanApi, "WlanEnumInterfaces");
+	WlanScan_t pWlanScan = (WlanScan_t)GetProcAddress(hWlanApi, "WlanScan");
+	WlanGetAvailableNetworkList_t pWlanGetAvailableNetworkList = (WlanGetAvailableNetworkList_t)GetProcAddress(hWlanApi, "WlanGetAvailableNetworkList");
+	WlanFreeMemory_t pWlanFreeMemory = (WlanFreeMemory_t)GetProcAddress(hWlanApi, "WlanFreeMemory");
+	WlanCloseHandle_t pWlanCloseHandle = (WlanCloseHandle_t)GetProcAddress(hWlanApi, "WlanCloseHandle");
+	WlanQueryInterface_t pWlanQueryInterface = (WlanQueryInterface_t)GetProcAddress(hWlanApi, "WlanQueryInterface");
+	
+	if (!pWlanOpenHandle || !pWlanEnumInterfaces || !pWlanScan || 
+		!pWlanGetAvailableNetworkList || !pWlanFreeMemory || !pWlanCloseHandle) {
+		DebugLog("错误: 无法获取 WLAN API 函数地址");
+		FreeLibrary(hWlanApi);
+		return;
+	}
+	
+	HANDLE hClient = NULL;
+	DWORD dwNegotiatedVersion = 0;
+	DWORD dwResult = pWlanOpenHandle(2, NULL, &dwNegotiatedVersion, &hClient);
+	
+	if (dwResult != ERROR_SUCCESS || !hClient) {
+		DebugLog("错误: WlanOpenHandle 失败, 错误码 %d", dwResult);
+		FreeLibrary(hWlanApi);
+		return;
+	}
+	
+	PWLAN_INTERFACE_INFO_LIST pInterfaceList = NULL;
+	dwResult = pWlanEnumInterfaces(hClient, NULL, &pInterfaceList);
+	
+	if (dwResult != ERROR_SUCCESS || !pInterfaceList || pInterfaceList->dwNumberOfItems == 0) {
+		DebugLog("错误: 未找到无线网卡");
+		pWlanCloseHandle(hClient, NULL);
+		FreeLibrary(hWlanApi);
+		return;
+	}
+	
+	// 遍历所有无线接口
+	for (DWORD ifIdx = 0; ifIdx < pInterfaceList->dwNumberOfItems && ifIdx < 1; ifIdx++) {
+		GUID interfaceGuid = pInterfaceList->InterfaceInfo[ifIdx].InterfaceGuid;
+		
+		// 发起扫描
+		dwResult = pWlanScan(hClient, &interfaceGuid, NULL, NULL);
+		if (dwResult != ERROR_SUCCESS) {
+			DebugLog("警告: WlanScan 失败, 错误码 %d", dwResult);
+		}
+		
+		// 等待扫描完成（最多5秒）
+		Sleep(2000);
+		
+		PWLAN_AVAILABLE_NETWORK_LIST pNetworkList = NULL;
+		dwResult = pWlanGetAvailableNetworkList(hClient, &interfaceGuid, 0, NULL, &pNetworkList);
+		
+		if (dwResult == ERROR_SUCCESS && pNetworkList) {
+			int count = (int)pNetworkList->dwNumberOfItems;
+			if (count > 20) count = 20;
+			
+			DebugLog("扫描到 %d 个网络", count);
+			
+			for (int i = 0; i < count && i < 20; i++) {
+				DWORD ssidLen = pNetworkList->Network[i].dot11Ssid.uSSIDLength;
+				if (ssidLen > 0 && ssidLen < 32) {
+					char ssid[33] = {0};
+					memcpy(ssid, pNetworkList->Network[i].dot11Ssid.ucSSID, ssidLen);
+					ssid[ssidLen] = '\0';
+					
+					// 跳过空SSID
+					if (ssid[0] == '\0') continue;
+					
+					strcpy(networkScanResults[networkScanCount], ssid);
+					
+					// 获取信号强度
+					int signalQuality = pNetworkList->Network[i].wlanSignalQuality;
+					if (signalQuality < 0) signalQuality = 0;
+					if (signalQuality > 100) signalQuality = 100;
+					
+					// 保存信号强度到全局变量（这里简化处理）
+					g_networkConfig.signalStrength = signalQuality;
+					
+					// 检查是否已连接
+					if (pNetworkList->Network[i].dwFlags & WLAN_AVAILABLE_NETWORK_CONNECTED) {
+						strcpy(g_networkConfig.ssid, ssid);
+						g_networkConfig.connected = TRUE;
+						isNetworkConnected = TRUE;
+						strcpy(networkStatus, ssid);
+						DebugLog("当前已连接到: %s", ssid);
+					}
+					
+					networkScanCount++;
+					DebugLog("网络 %d: %s (信号: %d%%)", i+1, ssid, signalQuality);
+				}
+			}
+			pWlanFreeMemory(pNetworkList);
+		} else {
+			DebugLog("错误: WlanGetAvailableNetworkList 失败, 错误码 %d", dwResult);
+		}
+	}
+	
+	pWlanFreeMemory(pInterfaceList);
+	pWlanCloseHandle(hClient, NULL);
+	FreeLibrary(hWlanApi);
+	
+	g_networkConfig.lastUpdateTime = GetTickCount();
+	DebugLog("网络扫描完成: 发现 %d 个网络", networkScanCount);
+}
+
+// ============================================================
+//  真实网络连接函数
+// ============================================================
+BOOL ConnectToNetwork(const char* ssid, const char* password) {
+	BOOL result = FALSE;
+	
+	if (!ssid || strlen(ssid) == 0) {
+		DebugLog("错误: SSID 为空");
+		return FALSE;
+	}
+	
+	HMODULE hWlanApi = LoadLibraryA("wlanapi.dll");
+	if (!hWlanApi) {
+		DebugLog("错误: 无法加载 wlanapi.dll");
+		return FALSE;
+	}
+	
+	typedef DWORD (WINAPI *WlanOpenHandle_t)(DWORD, PVOID, DWORD*, PHANDLE);
+	typedef DWORD (WINAPI *WlanEnumInterfaces_t)(HANDLE, PVOID, PWLAN_INTERFACE_INFO_LIST*);
+	typedef DWORD (WINAPI *WlanSetProfile_t)(HANDLE, const GUID*, DWORD, PCWSTR, PCWSTR, BOOL, PVOID, PDWORD);
+	typedef DWORD (WINAPI *WlanConnect_t)(HANDLE, const GUID*, PWLAN_CONNECTION_PARAMETERS, PVOID);
+	typedef DWORD (WINAPI *WlanDisconnect_t)(HANDLE, const GUID*, PVOID);
+	typedef DWORD (WINAPI *WlanFreeMemory_t)(PVOID);
+	typedef DWORD (WINAPI *WlanCloseHandle_t)(HANDLE, PVOID);
+	
+	WlanOpenHandle_t pWlanOpenHandle = (WlanOpenHandle_t)GetProcAddress(hWlanApi, "WlanOpenHandle");
+	WlanEnumInterfaces_t pWlanEnumInterfaces = (WlanEnumInterfaces_t)GetProcAddress(hWlanApi, "WlanEnumInterfaces");
+	WlanSetProfile_t pWlanSetProfile = (WlanSetProfile_t)GetProcAddress(hWlanApi, "WlanSetProfile");
+	WlanConnect_t pWlanConnect = (WlanConnect_t)GetProcAddress(hWlanApi, "WlanConnect");
+	WlanDisconnect_t pWlanDisconnect = (WlanDisconnect_t)GetProcAddress(hWlanApi, "WlanDisconnect");
+	WlanFreeMemory_t pWlanFreeMemory = (WlanFreeMemory_t)GetProcAddress(hWlanApi, "WlanFreeMemory");
+	WlanCloseHandle_t pWlanCloseHandle = (WlanCloseHandle_t)GetProcAddress(hWlanApi, "WlanCloseHandle");
+	
+	if (!pWlanOpenHandle || !pWlanEnumInterfaces || !pWlanSetProfile || 
+		!pWlanConnect || !pWlanFreeMemory || !pWlanCloseHandle) {
+		DebugLog("错误: 无法获取 WLAN API 函数地址");
+		FreeLibrary(hWlanApi);
+		return FALSE;
+	}
+	
+	HANDLE hClient = NULL;
+	DWORD dwNegotiatedVersion = 0;
+	DWORD dwResult = pWlanOpenHandle(2, NULL, &dwNegotiatedVersion, &hClient);
+	
+	if (dwResult != ERROR_SUCCESS || !hClient) {
+		DebugLog("错误: WlanOpenHandle 失败, 错误码 %d", dwResult);
+		FreeLibrary(hWlanApi);
+		return FALSE;
+	}
+	
+	PWLAN_INTERFACE_INFO_LIST pInterfaceList = NULL;
+	dwResult = pWlanEnumInterfaces(hClient, NULL, &pInterfaceList);
+	
+	if (dwResult != ERROR_SUCCESS || !pInterfaceList || pInterfaceList->dwNumberOfItems == 0) {
+		DebugLog("错误: 未找到无线网卡");
+		pWlanCloseHandle(hClient, NULL);
+		FreeLibrary(hWlanApi);
+		return FALSE;
+	}
+	
+	GUID interfaceGuid = pInterfaceList->InterfaceInfo[0].InterfaceGuid;
+	pWlanFreeMemory(pInterfaceList);
+	
+	// 先断开当前连接
+	if (g_networkConfig.connected) {
+		pWlanDisconnect(hClient, &interfaceGuid, NULL);
+		Sleep(500);
+	}
+	
+	// 创建 WLAN 配置文件
+	WCHAR wszProfile[4096];
+	if (password && strlen(password) > 0) {
+		// 有密码：使用 WPA2-PSK
+		swprintf(wszProfile, 4096,
+				 L"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+				 L"<WLANProfile xmlns=\"http://www.microsoft.com/networking/WLAN/profile/v1\">"
+				 L"<name>%S</name>"
+				 L"<SSIDConfig><SSID><name>%S</name></SSID></SSIDConfig>"
+				 L"<connectionType>ESS</connectionType>"
+				 L"<connectionMode>auto</connectionMode>"
+				 L"<MSM><security><authEncryption>"
+				 L"<authentication>WPA2PSK</authentication>"
+				 L"<encryption>AES</encryption>"
+				 L"</authEncryption>"
+				 L"<sharedKey><keyType>passPhrase</keyType>"
+				 L"<protected>false</protected>"
+				 L"<keyMaterial>%S</keyMaterial>"
+				 L"</sharedKey></security></MSM></WLANProfile>",
+				 ssid, ssid, password);
+	} else {
+		// 无密码：开放网络
+		swprintf(wszProfile, 4096,
+				 L"<?xml version=\"1.0\" encoding=\"US-ASCII\"?>"
+				 L"<WLANProfile xmlns=\"http://www.microsoft.com/networking/WLAN/profile/v1\">"
+				 L"<name>%S</name>"
+				 L"<SSIDConfig><SSID><name>%S</name></SSID></SSIDConfig>"
+				 L"<connectionType>ESS</connectionType>"
+				 L"<connectionMode>auto</connectionMode>"
+				 L"<MSM><security><authEncryption>"
+				 L"<authentication>open</authentication>"
+				 L"<encryption>none</encryption>"
+				 L"</authEncryption></security></MSM></WLANProfile>",
+				 ssid, ssid);
+	}
+	
+	DWORD dwReasonCode = 0;
+	dwResult = pWlanSetProfile(hClient, &interfaceGuid, 0, wszProfile, NULL, FALSE, NULL, &dwReasonCode);
+	
+	if (dwResult != ERROR_SUCCESS) {
+		DebugLog("设置配置文件失败: 错误码 %d, 原因码 %d", dwResult, dwReasonCode);
+		pWlanCloseHandle(hClient, NULL);
+		FreeLibrary(hWlanApi);
+		return FALSE;
+	}
+	
+	// 连接
+	WLAN_CONNECTION_PARAMETERS connParams;
+	ZeroMemory(&connParams, sizeof(WLAN_CONNECTION_PARAMETERS));
+	connParams.wlanConnectionMode = (WLAN_CONNECTION_MODE)1;  // wlan_connection_mode_profile = 1
+	connParams.strProfile = wszProfile;
+	connParams.dot11BssType = (DOT11_BSS_TYPE)1;              // dot11_BSS_type_infrastructure = 1
+	connParams.dwFlags = 0;
+	
+	dwResult = pWlanConnect(hClient, &interfaceGuid, &connParams, NULL);
+	
+	if (dwResult == ERROR_SUCCESS) {
+		result = TRUE;
+		DebugLog("成功连接到网络: %s", ssid);
+		
+		// 保存密码
+		if (password && strlen(password) > 0) {
+			SavePassword(ssid, password);
+		}
+		
+		// 更新连接状态
+		strcpy(g_networkConfig.ssid, ssid);
+		g_networkConfig.connected = TRUE;
+		isNetworkConnected = TRUE;
+		strcpy(networkStatus, ssid);
+		g_networkConfig.lastUpdateTime = GetTickCount();
+		
+		// 获取IP信息
+		GetNetworkIPInfo(ssid);
+	} else {
+		DebugLog("连接失败: 错误码 %d", dwResult);
+	}
+	
+	pWlanCloseHandle(hClient, NULL);
+	FreeLibrary(hWlanApi);
+	return result;
+}
+
+// ============================================================
+//  获取网络IP信息 - 使用 IP Helper API
+// ============================================================
+void GetNetworkIPInfo(const char* ssid) {
+	// 使用 GetAdaptersInfo 获取IP信息
+	PIP_ADAPTER_INFO pAdapterInfo = NULL;
+	ULONG ulOutBufLen = sizeof(IP_ADAPTER_INFO);
+	
+	pAdapterInfo = (IP_ADAPTER_INFO*)malloc(sizeof(IP_ADAPTER_INFO));
+	if (!pAdapterInfo) return;
+	
+	DWORD dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen);
+	if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+		free(pAdapterInfo);
+		pAdapterInfo = (IP_ADAPTER_INFO*)malloc(ulOutBufLen);
+		if (!pAdapterInfo) return;
+		dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen);
+	}
+	
+	if (dwRetVal == NO_ERROR) {
+		PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+		while (pAdapter) {
+			// 检查是否是无线适配器（描述中包含 Wireless 或 WiFi）
+			if (strstr(pAdapter->Description, "Wireless") || 
+				strstr(pAdapter->Description, "WiFi") ||
+				strstr(pAdapter->Description, "WLAN")) {
+				
+				// 获取IP地址
+				if (pAdapter->IpAddressList.IpAddress.String[0] != '0' || 
+					pAdapter->IpAddressList.IpAddress.String[1] != '.') {
+					strcpy(g_networkConfig.ipAddress, pAdapter->IpAddressList.IpAddress.String);
+				}
+				if (pAdapter->IpAddressList.IpMask.String[0] != '0') {
+					strcpy(g_networkConfig.subnetMask, pAdapter->IpAddressList.IpMask.String);
+				}
+				
+				// 获取网关
+				if (pAdapter->GatewayList.IpAddress.String[0] != '0') {
+					strcpy(g_networkConfig.gateway, pAdapter->GatewayList.IpAddress.String);
+				}
+				
+				DebugLog("IP信息: %s / %s, 网关: %s", 
+						 g_networkConfig.ipAddress, 
+						 g_networkConfig.subnetMask,
+						 g_networkConfig.gateway);
+				break;
+			}
+			pAdapter = pAdapter->Next;
+		}
+	}
+	
+	free(pAdapterInfo);
+}
+
+// ============================================================
+//  保存WiFi密码到文件
+// ============================================================
+void SavePassword(const char* ssid, const char* password) {
+	if (!ssid || strlen(ssid) == 0 || !password || strlen(password) == 0) return;
+	
+	// 读取现有密码列表
+	struct WifiPasswordEntry {
+		char ssid[64];
+		char password[128];
+	};
+	
+	WifiPasswordEntry entries[100];
+	int entryCount = 0;
+	
+	FILE* file = fopen(WIFI_PASSWORD_FILE, "rb");
+	if (file) {
+		while (fread(&entries[entryCount], sizeof(WifiPasswordEntry), 1, file) && entryCount < 100) {
+			entryCount++;
+		}
+		fclose(file);
+	}
+	
+	// 检查是否已存在，如果存在则更新
+	BOOL found = FALSE;
+	for (int i = 0; i < entryCount; i++) {
+		if (strcmp(entries[i].ssid, ssid) == 0) {
+			strcpy(entries[i].password, password);
+			found = TRUE;
+			break;
+		}
+	}
+	
+	// 如果不存在则添加
+	if (!found && entryCount < 100) {
+		strcpy(entries[entryCount].ssid, ssid);
+		strcpy(entries[entryCount].password, password);
+		entryCount++;
+	}
+	
+	// 保存
+	file = fopen(WIFI_PASSWORD_FILE, "wb");
+	if (file) {
+		fwrite(entries, sizeof(WifiPasswordEntry), entryCount, file);
+		fclose(file);
+		DebugLog("密码已保存: %s", ssid);
+	}
+}
+
+// ============================================================
+//  获取保存的WiFi密码
+// ============================================================
+BOOL GetSavedPassword(const char* ssid, char* password, int passwordSize) {
+	if (!ssid || strlen(ssid) == 0 || !password || passwordSize <= 0) return FALSE;
+	
+	struct WifiPasswordEntry {
+		char ssid[64];
+		char password[128];
+	};
+	
+	WifiPasswordEntry entries[100];
+	int entryCount = 0;
+	
+	FILE* file = fopen(WIFI_PASSWORD_FILE, "rb");
+	if (!file) return FALSE;
+	
+	while (fread(&entries[entryCount], sizeof(WifiPasswordEntry), 1, file) && entryCount < 100) {
+		entryCount++;
+	}
+	fclose(file);
+	
+	for (int i = 0; i < entryCount; i++) {
+		if (strcmp(entries[i].ssid, ssid) == 0) {
+			strncpy(password, entries[i].password, passwordSize - 1);
+			password[passwordSize - 1] = '\0';
+			return TRUE;
+		}
+	}
+	
+	return FALSE;
+}
+
+// ============================================================
+//  断开网络连接
+// ============================================================
+void DisconnectNetwork() {
+	HMODULE hWlanApi = LoadLibraryA("wlanapi.dll");
+	if (!hWlanApi) {
+		DebugLog("错误: 无法加载 wlanapi.dll");
+		return;
+	}
+	
+	typedef DWORD (WINAPI *WlanOpenHandle_t)(DWORD, PVOID, DWORD*, PHANDLE);
+	typedef DWORD (WINAPI *WlanEnumInterfaces_t)(HANDLE, PVOID, PWLAN_INTERFACE_INFO_LIST*);
+	typedef DWORD (WINAPI *WlanDisconnect_t)(HANDLE, const GUID*, PVOID);
+	typedef DWORD (WINAPI *WlanFreeMemory_t)(PVOID);
+	typedef DWORD (WINAPI *WlanCloseHandle_t)(HANDLE, PVOID);
+	
+	WlanOpenHandle_t pWlanOpenHandle = (WlanOpenHandle_t)GetProcAddress(hWlanApi, "WlanOpenHandle");
+	WlanEnumInterfaces_t pWlanEnumInterfaces = (WlanEnumInterfaces_t)GetProcAddress(hWlanApi, "WlanEnumInterfaces");
+	WlanDisconnect_t pWlanDisconnect = (WlanDisconnect_t)GetProcAddress(hWlanApi, "WlanDisconnect");
+	WlanFreeMemory_t pWlanFreeMemory = (WlanFreeMemory_t)GetProcAddress(hWlanApi, "WlanFreeMemory");
+	WlanCloseHandle_t pWlanCloseHandle = (WlanCloseHandle_t)GetProcAddress(hWlanApi, "WlanCloseHandle");
+	
+	if (!pWlanOpenHandle || !pWlanEnumInterfaces || !pWlanDisconnect || 
+		!pWlanFreeMemory || !pWlanCloseHandle) {
+		FreeLibrary(hWlanApi);
+		return;
+	}
+	
+	HANDLE hClient = NULL;
+	DWORD dwNegotiatedVersion = 0;
+	DWORD dwResult = pWlanOpenHandle(2, NULL, &dwNegotiatedVersion, &hClient);
+	
+	if (dwResult == ERROR_SUCCESS && hClient) {
+		PWLAN_INTERFACE_INFO_LIST pInterfaceList = NULL;
+		dwResult = pWlanEnumInterfaces(hClient, NULL, &pInterfaceList);
+		
+		if (dwResult == ERROR_SUCCESS && pInterfaceList && pInterfaceList->dwNumberOfItems > 0) {
+			GUID interfaceGuid = pInterfaceList->InterfaceInfo[0].InterfaceGuid;
+			pWlanDisconnect(hClient, &interfaceGuid, NULL);
+			pWlanFreeMemory(pInterfaceList);
+			
+			DebugLog("已断开网络连接");
+		}
+		pWlanCloseHandle(hClient, NULL);
+	}
+	
+	FreeLibrary(hWlanApi);
+	
+	// 更新状态
+	g_networkConfig.connected = FALSE;
+	isNetworkConnected = FALSE;
+	strcpy(networkStatus, "未连接");
+	strcpy(g_networkConfig.ssid, "");
+	strcpy(g_networkConfig.ipAddress, "0.0.0.0");
+}
+
+
 // ==================== 调试日志函数 ====================
 void DebugLog(const char* format, ...) {
     if (!g_debugLog) {
@@ -711,8 +1256,8 @@ static BOOL isNotificationHovered = FALSE;
 static BOOL isTimeHovered = FALSE;
 
 // 网络状态
-static BOOL isNetworkConnected = TRUE;
-static char networkStatus[20] = "已连接";
+//static BOOL isNetworkConnected = TRUE;
+//static char networkStatus[20] = "已连接";
 
 // 音量控制
 static int volumeLevel = 75;
@@ -747,7 +1292,7 @@ static const StartMenuItem startMenuItems[] = {
 	{L"\U0001F41B", L"Bug报告", "bugreport", FALSE},
 	{L"\U0001F4C5", L"日历", "calendar", FALSE},
 	{L"\U0001F551", L"时钟", "clock", FALSE},
-	{L"\U0001F9E0", L"AI助手", "ai", FALSE},    // ← 添加这一行
+	{L"\U0001F9E0", L"AI助手", "ai", FALSE},
 	{L"", L"", "", TRUE},
 	{L"\U0001F512", L"关机", "shutdown", FALSE}
 };
@@ -831,6 +1376,257 @@ const char* punishmentDialogues[] = {
     "按R键重新开始...",
     NULL
 };
+
+// ============================================================
+//  网络配置对话框 - 绘制函数
+// ============================================================
+
+// ============================================================
+//  网络配置对话框 - 绘制函数（修复版）
+// ============================================================
+
+void DrawNetworkConfigDialog(HDC hdc, int centerX, int centerY) {
+	int dialogWidth = 380;
+	int dialogHeight = 380;  // 减小高度
+	int dialogX = centerX - dialogWidth / 2;
+	int dialogY = STATUSBAR_HEIGHT + 5;  // 固定在状态栏下方
+	
+	// 获取窗口矩形确保不超出边界
+	RECT clientRect;
+	GetClientRect(GetActiveWindow(), &clientRect);
+	
+	// 边界修正
+	if (dialogX < 10) dialogX = 10;
+	if (dialogX + dialogWidth > clientRect.right - 10) dialogX = clientRect.right - dialogWidth - 10;
+	if (dialogY + dialogHeight > clientRect.bottom - 10) dialogY = clientRect.bottom - dialogHeight - 10;
+	if (dialogY < STATUSBAR_HEIGHT + 5) dialogY = STATUSBAR_HEIGHT + 5;
+	
+	// 背景
+	RECT dialogRect = {dialogX, dialogY, dialogX + dialogWidth, dialogY + dialogHeight};
+	HBRUSH hBgBrush = CreateSolidBrush(RGB(25, 25, 45));
+	FillRect(hdc, &dialogRect, hBgBrush);
+	DeleteObject(hBgBrush);
+	
+	// 边框
+	HPEN hBorderPen = CreatePen(PS_SOLID, 2, RGB(60, 60, 100));
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	RoundRect(hdc, dialogX, dialogY, dialogX + dialogWidth, dialogY + dialogHeight, 12, 12);
+	SelectObject(hdc, hOldPen);
+	DeleteObject(hBorderPen);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	
+	HFONT hTitleFont = CreateFont(18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+	HFONT hNormalFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								   DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+	HFONT hSmallFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+	
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
+	
+	// 标题栏
+	RECT titleRect = {dialogX, dialogY, dialogX + dialogWidth, dialogY + 35};
+	HBRUSH hTitleBgBrush = CreateSolidBrush(RGB(45, 45, 80));
+	FillRect(hdc, &titleRect, hTitleBgBrush);
+	DeleteObject(hTitleBgBrush);
+	
+	SetTextColor(hdc, RGB(255, 255, 255));
+	TextOut(hdc, dialogX + 15, dialogY + 8, "网络设置", 8);
+	
+	// 提示：点击外部关闭
+	SetTextColor(hdc, RGB(150, 150, 180));
+	SelectObject(hdc, hSmallFont);
+	TextOut(hdc, dialogX + dialogWidth - 120, dialogY + 10, "点击外部关闭", 10);
+	
+	SelectObject(hdc, hNormalFont);
+	int contentY = dialogY + 45;
+	
+	// ---- 当前状态 ----
+	SetTextColor(hdc, g_networkConfig.connected ? RGB(100, 255, 100) : RGB(255, 200, 100));
+	char statusText[100];
+	if (g_networkConfig.connected) {
+		sprintf(statusText, "[已连接] %s", g_networkConfig.ssid);
+	} else {
+		sprintf(statusText, "[未连接]");
+	}
+	TextOut(hdc, dialogX + 15, contentY, statusText, strlen(statusText));
+	contentY += 28;
+	
+	// ---- IP信息 ----
+	if (g_networkConfig.connected) {
+		SetTextColor(hdc, RGB(180, 180, 200));
+		sprintf(statusText, "IP: %s", g_networkConfig.ipAddress);
+		TextOut(hdc, dialogX + 15, contentY, statusText, strlen(statusText));
+		contentY += 20;
+		sprintf(statusText, "网关: %s", g_networkConfig.gateway);
+		TextOut(hdc, dialogX + 15, contentY, statusText, strlen(statusText));
+		contentY += 20;
+	}
+	contentY += 10;
+	
+	// ---- 分隔线 ----
+	HPEN hLinePen = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+	HPEN hOldLinePen = (HPEN)SelectObject(hdc, hLinePen);
+	MoveToEx(hdc, dialogX + 15, contentY, NULL);
+	LineTo(hdc, dialogX + dialogWidth - 15, contentY);
+	SelectObject(hdc, hOldLinePen);
+	DeleteObject(hLinePen);
+	contentY += 15;
+	
+	// ---- 可用网络列表 ----
+	SetTextColor(hdc, RGB(200, 200, 220));
+	TextOut(hdc, dialogX + 15, contentY, "可用网络", 8);
+	contentY += 22;
+	
+	// 如果网络列表为空，执行扫描
+	if (networkScanCount == 0 && (GetTickCount() - g_networkConfig.lastUpdateTime > 5000 || g_networkConfig.lastUpdateTime == 0)) {
+		PerformNetworkScan();
+	}
+	
+	// 绘制网络列表
+	int listStartY = contentY;
+	int listHeight = 110;
+	int maxVisible = listHeight / 26;
+	int endIdx = min(maxVisible, networkScanCount);
+	
+	RECT listRect = {dialogX + 15, listStartY, dialogX + dialogWidth - 15, listStartY + listHeight};
+	HBRUSH hListBgBrush = CreateSolidBrush(RGB(15, 15, 30));
+	FillRect(hdc, &listRect, hListBgBrush);
+	DeleteObject(hListBgBrush);
+	HPEN hListBorderPen = CreatePen(PS_SOLID, 1, RGB(50, 50, 70));
+	HPEN hOldListPen = (HPEN)SelectObject(hdc, hListBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, listRect.left, listRect.top, listRect.right, listRect.bottom);
+	SelectObject(hdc, hOldListPen);
+	DeleteObject(hListBorderPen);
+	
+	// 绘制每个网络项
+	SelectObject(hdc, hSmallFont);
+	for (int i = 0; i < endIdx; i++) {
+		int itemY = listStartY + 3 + i * 26;
+		BOOL isSelected = (i == selectedNetworkIndex);
+		
+		RECT itemRect = {dialogX + 20, itemY, dialogX + dialogWidth - 20, itemY + 24};
+		if (isSelected) {
+			HBRUSH hSelBrush = CreateSolidBrush(RGB(50, 70, 150));
+			FillRect(hdc, &itemRect, hSelBrush);
+			DeleteObject(hSelBrush);
+		}
+		
+		SetTextColor(hdc, isSelected ? RGB(255, 255, 255) : RGB(200, 200, 200));
+		char networkItem[100];
+		sprintf(networkItem, "  %s", networkScanResults[i]);
+		TextOut(hdc, dialogX + 20, itemY + 4, networkItem, strlen(networkItem));
+	}
+	
+	contentY = listStartY + listHeight + 10;
+	
+	// ---- 密码输入（选中网络时显示） ----
+	if (selectedNetworkIndex >= 0) {
+		// 分隔线
+		HPEN hLinePen2 = CreatePen(PS_SOLID, 1, RGB(60, 60, 80));
+		HPEN hOldLinePen2 = (HPEN)SelectObject(hdc, hLinePen2);
+		MoveToEx(hdc, dialogX + 15, contentY, NULL);
+		LineTo(hdc, dialogX + dialogWidth - 15, contentY);
+		SelectObject(hdc, hOldLinePen2);
+		DeleteObject(hLinePen2);
+		contentY += 12;
+		
+		SetTextColor(hdc, RGB(200, 200, 220));
+		TextOut(hdc, dialogX + 15, contentY, "密码:", 4);
+		
+		RECT pwdRect = {dialogX + 65, contentY - 2, dialogX + dialogWidth - 15, contentY + 24};
+		HBRUSH hPwdBrush = CreateSolidBrush(RGB(255, 255, 255));
+		FillRect(hdc, &pwdRect, hPwdBrush);
+		DeleteObject(hPwdBrush);
+		
+		HPEN hPwdBorderPen = CreatePen(PS_SOLID, networkDialogFocus == 1 ? 2 : 1, 
+									   networkDialogFocus == 1 ? RGB(100, 150, 255) : RGB(100, 100, 100));
+		HPEN hOldPwdPen = (HPEN)SelectObject(hdc, hPwdBorderPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, pwdRect.left, pwdRect.top, pwdRect.right, pwdRect.bottom);
+		SelectObject(hdc, hOldPwdPen);
+		DeleteObject(hPwdBorderPen);
+		
+		SetTextColor(hdc, RGB(0, 0, 0));
+		char displayPwd[100];
+		if (isWifiPasswordMode) {
+			int len = strlen(wifiPasswordInput);
+			for (int i = 0; i < len && i < 99; i++) displayPwd[i] = '*';
+			displayPwd[len] = '\0';
+		} else {
+			strcpy(displayPwd, wifiPasswordInput);
+		}
+		TextOut(hdc, pwdRect.left + 5, pwdRect.top + 4, displayPwd, strlen(displayPwd));
+		
+		contentY += 35;
+		
+		// 连接按钮
+		RECT connectBtn = {dialogX + 15, contentY, dialogX + 100, contentY + 30};
+		HBRUSH hConnectBrush = CreateSolidBrush(RGB(0, 120, 200));
+		FillRect(hdc, &connectBtn, hConnectBrush);
+		DeleteObject(hConnectBrush);
+		HPEN hConnectPen = CreatePen(PS_SOLID, 1, RGB(0, 150, 220));
+		HPEN hOldConnectPen = (HPEN)SelectObject(hdc, hConnectPen);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, connectBtn.left, connectBtn.top, connectBtn.right, connectBtn.bottom);
+		SelectObject(hdc, hOldConnectPen);
+		DeleteObject(hConnectPen);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		TextOut(hdc, connectBtn.left + 25, connectBtn.top + 6, "连接", 4);
+		
+		// 断开按钮（如果已连接）
+		if (g_networkConfig.connected) {
+			RECT disconnectBtn = {dialogX + 115, contentY, dialogX + 200, contentY + 30};
+			HBRUSH hDisconnectBrush = CreateSolidBrush(RGB(200, 80, 80));
+			FillRect(hdc, &disconnectBtn, hDisconnectBrush);
+			DeleteObject(hDisconnectBrush);
+			HPEN hDisconnectPen = CreatePen(PS_SOLID, 1, RGB(220, 100, 100));
+			HPEN hOldDisconnectPen = (HPEN)SelectObject(hdc, hDisconnectPen);
+			SelectObject(hdc, GetStockObject(NULL_BRUSH));
+			Rectangle(hdc, disconnectBtn.left, disconnectBtn.top, disconnectBtn.right, disconnectBtn.bottom);
+			SelectObject(hdc, hOldDisconnectPen);
+			DeleteObject(hDisconnectPen);
+			SetTextColor(hdc, RGB(255, 255, 255));
+			TextOut(hdc, disconnectBtn.left + 25, disconnectBtn.top + 6, "断开", 4);
+		}
+		
+		contentY += 40;
+	}
+	
+	// ---- 底部刷新按钮 ----
+	int bottomY = dialogY + dialogHeight - 38;
+	
+	RECT refreshBtn = {dialogX + 15, bottomY, dialogX + 85, bottomY + 28};
+	HBRUSH hRefreshBrush = CreateSolidBrush(RGB(60, 60, 120));
+	FillRect(hdc, &refreshBtn, hRefreshBrush);
+	DeleteObject(hRefreshBrush);
+	HPEN hRefreshPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 160));
+	HPEN hOldRefreshPen = (HPEN)SelectObject(hdc, hRefreshPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, refreshBtn.left, refreshBtn.top, refreshBtn.right, refreshBtn.bottom);
+	SelectObject(hdc, hOldRefreshPen);
+	DeleteObject(hRefreshPen);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	SelectObject(hdc, hSmallFont);
+	TextOut(hdc, refreshBtn.left + 20, refreshBtn.top + 6, "刷新", 4);
+	
+	// 状态信息
+	if (connectStatusMsg[0] != '\0' && GetTickCount() - connectStatusTime < 3000) {
+		SetTextColor(hdc, RGB(255, 255, 100));
+		TextOut(hdc, dialogX + 110, bottomY + 6, connectStatusMsg, strlen(connectStatusMsg));
+	}
+	
+	SelectObject(hdc, hOldFont);
+	DeleteObject(hTitleFont);
+	DeleteObject(hNormalFont);
+	DeleteObject(hSmallFont);
+}
 
 // 桌面快捷方式结构
 #define MAX_SHORTCUTS 50
@@ -10341,6 +11137,11 @@ void DrawDesktop(HDC hdc, RECT rect) {
 	if (showAIWindow) {
 		DrawAIWindow(hdc, rect.right / 2, rect.bottom / 2);
 	}
+	if (showNetworkConfigDialog) {
+		int centerX = rect.right / 2;
+		int centerY = rect.bottom / 2 + STATUSBAR_HEIGHT / 2;
+		DrawNetworkConfigDialog(hdc, centerX, centerY);
+	}
 	
 	// ============================================================
 	//  3. 弹出面板已经在 DrawStatusBar 中绘制了，不在这里重复绘制
@@ -12786,6 +13587,14 @@ void DrawStatusBar(HDC hdc, RECT rect) {
 		DrawNotificationPanel(hdc, notifyX - 100, STATUSBAR_HEIGHT);
 	}
 	
+//	if (showNetworkConfigDialog) {
+//		RECT clientRect;
+//		GetClientRect(GetActiveWindow(), &clientRect);
+//		int centerX = (clientRect.left + clientRect.right) / 2;
+//		int centerY = (clientRect.top + clientRect.bottom) / 2 + STATUSBAR_HEIGHT / 2;
+//		DrawNetworkConfigDialog(hdc, centerX, centerY);
+//	}
+	
 	DebugLog("DrawStatusBar: 完成");
 }
 
@@ -12850,7 +13659,16 @@ void HandleStatusBarClick(int x, int y) {
 	int networkX = iconStartX;
 	if (x >= networkX && x <= networkX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
 		DebugLog("点击网络图标");
-		showNetworkSettings = !showNetworkSettings;
+		showNetworkConfigDialog = !showNetworkConfigDialog;
+		if (showNetworkConfigDialog) {
+			// 打开时执行真实网络扫描
+			PerformNetworkScan();
+			selectedNetworkIndex = -1;
+			strcpy(wifiPasswordInput, "");
+			isWifiPasswordMode = FALSE;
+			networkDialogFocus = 0;
+			connectStatusMsg[0] = '\0';
+		}
 		showVolumeSlider = FALSE;
 		showDisplaySettings = FALSE;
 		showBatterySettings = FALSE;
@@ -12934,6 +13752,7 @@ void HandleStatusBarClick(int x, int y) {
 		CloseStartMenu();
 	}
 }
+
 // ============================================================
 //  处理开始菜单点击
 // ============================================================
@@ -13115,6 +13934,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 			
 			brightnessLevel = GetMonitorBrightness();
 			DebugLog("当前屏幕亮度: %d%%", brightnessLevel);
+			
+			FILE* pwdFile = fopen(WIFI_PASSWORD_FILE, "ab");
+			if (pwdFile) {
+				fclose(pwdFile);
+				DebugLog("WiFi密码文件已初始化: %s", WIFI_PASSWORD_FILE);
+			} else {
+				DebugLog("警告: 无法创建WiFi密码文件");
+			}
 			
 			// ---- 强制关闭所有界面 ----
 			showFOSBeta = FALSE;
@@ -14378,9 +15205,256 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 				return 0;
 			}
 			
+			
+			if (showNetworkConfigDialog) {
+				// 获取对话框位置（与绘制函数中的位置计算保持一致）
+				int dialogWidth = 380;
+				int dialogHeight = 420;
+				RECT clientRect;
+				GetClientRect(hwnd, &clientRect);
+				int dialogX = x - dialogWidth / 2;
+				int dialogY = y;
+				
+				// 边界修正（与绘制函数保持一致）
+				if (dialogX < 10) dialogX = 10;
+				if (dialogX + dialogWidth > clientRect.right - 10) dialogX = clientRect.right - dialogWidth - 10;
+				if (dialogY + dialogHeight > clientRect.bottom - 10) dialogY = clientRect.bottom - dialogHeight - 10;
+				if (dialogY < STATUSBAR_HEIGHT + 10) dialogY = STATUSBAR_HEIGHT + 10;
+				
+				// 检查是否点击在对话框内
+				if (x >= dialogX && x <= dialogX + dialogWidth && y >= dialogY && y <= dialogY + dialogHeight) {
+					
+					// 关闭按钮
+					RECT closeRect = {dialogX + dialogWidth - 35, dialogY + 8, dialogX + dialogWidth - 10, dialogY + 33};
+					if (x >= closeRect.left && x <= closeRect.right && y >= closeRect.top && y <= closeRect.bottom) {
+						showNetworkConfigDialog = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// 网络列表点击
+					int listStartY = dialogY + 55 + 30 + 30 + 15 + 25;
+					int listHeight = 130;
+					if (y >= listStartY && y <= listStartY + listHeight) {
+						int idx = (y - listStartY - 5) / 28;
+						if (idx >= 0 && idx < networkScanCount) {
+							selectedNetworkIndex = idx;
+							// 检查是否已保存密码
+							char savedPwd[100] = "";
+							if (GetSavedPassword(networkScanResults[idx], savedPwd, sizeof(savedPwd))) {
+								strcpy(wifiPasswordInput, savedPwd);
+								isWifiPasswordMode = TRUE;
+							} else {
+								strcpy(wifiPasswordInput, "");
+								isWifiPasswordMode = FALSE;
+							}
+							networkDialogFocus = 1;
+							connectStatusMsg[0] = '\0';
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+					}
+					
+					// 密码输入框和连接按钮
+					if (selectedNetworkIndex >= 0) {
+						int contentY = listStartY + listHeight + 15 + 15 + 28;
+						
+						// 密码输入框点击
+						RECT pwdRect = {dialogX + 70, contentY - 2, dialogX + dialogWidth - 15, contentY + 26};
+						if (x >= pwdRect.left && x <= pwdRect.right && y >= pwdRect.top && y <= pwdRect.bottom) {
+							networkDialogFocus = 1;
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+						
+						// 连接按钮
+						int btnY = contentY + 40;
+						RECT connectBtn = {dialogX + 15, btnY, dialogX + 120, btnY + 32};
+						// 连接按钮
+						if (x >= connectBtn.left && x <= connectBtn.right && y >= connectBtn.top && y <= connectBtn.bottom) {
+							if (selectedNetworkIndex >= 0 && selectedNetworkIndex < networkScanCount) {
+								const char* ssid = networkScanResults[selectedNetworkIndex];
+								const char* password = wifiPasswordInput;
+								
+								// 真实连接
+								BOOL connected = ConnectToNetwork(ssid, password);
+								
+								if (connected) {
+									// 连接成功后获取IP信息
+									GetNetworkIPInfo(ssid);
+									sprintf(connectStatusMsg, "已连接到 %s", ssid);
+									connectStatusTime = GetTickCount();
+									isNetworkConnected = TRUE;
+									strcpy(networkStatus, ssid);
+									g_networkConfig.connected = TRUE;
+								} else {
+									sprintf(connectStatusMsg, "连接 %s 失败", ssid);
+									connectStatusTime = GetTickCount();
+								}
+								InvalidateRect(GetActiveWindow(), NULL, TRUE);
+							}
+							return 0;
+						}
+						
+						// 断开按钮
+						if (g_networkConfig.connected) {
+							RECT disconnectBtn = {dialogX + 135, btnY, dialogX + 240, btnY + 32};
+							if (x >= disconnectBtn.left && x <= disconnectBtn.right && y >= disconnectBtn.top && y <= disconnectBtn.bottom) {
+								g_networkConfig.connected = FALSE;
+								strcpy(g_networkConfig.ssid, "");
+								strcpy(g_networkConfig.ipAddress, "0.0.0.0");
+								isNetworkConnected = FALSE;
+								strcpy(networkStatus, "未连接");
+								strcpy(connectStatusMsg, "已断开网络");
+								connectStatusTime = GetTickCount();
+								InvalidateRect(hwnd, NULL, TRUE);
+								return 0;
+							}
+						}
+					}
+					
+					// 刷新按钮
+					int bottomY = dialogY + dialogHeight - 45;
+					RECT refreshBtn = {dialogX + 15, bottomY, dialogX + 100, bottomY + 32};
+					if (x >= refreshBtn.left && x <= refreshBtn.right && y >= refreshBtn.top && y <= refreshBtn.bottom) {
+						networkScanCount = 0;
+						g_networkConfig.lastUpdateTime = 0;
+						strcpy(connectStatusMsg, "正在扫描网络...");
+						connectStatusTime = GetTickCount();
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+				} else {
+					// 点击对话框外部，关闭对话框
+					showNetworkConfigDialog = FALSE;
+					InvalidateRect(hwnd, NULL, TRUE);
+					return 0;
+				}
+			}
+			
 			if (showDesktop) {
 				// ============================================================
-				//  【新增】状态栏图标点击处理（网络、音量、显示、设置、电池、通知）
+				// 网络配置对话框点击处理（放在最前面）
+				// ============================================================
+				if (showNetworkConfigDialog) {
+					int dialogWidth = 380;
+					int dialogHeight = 380;
+					RECT clientRect;
+					GetClientRect(hwnd, &clientRect);
+					int centerX = clientRect.right / 2;
+					int dialogX = centerX - dialogWidth / 2;
+					int dialogY = STATUSBAR_HEIGHT + 5;
+					
+					// 边界修正
+					if (dialogX < 10) dialogX = 10;
+					if (dialogX + dialogWidth > clientRect.right - 10) dialogX = clientRect.right - dialogWidth - 10;
+					if (dialogY + dialogHeight > clientRect.bottom - 10) dialogY = clientRect.bottom - dialogHeight - 10;
+					if (dialogY < STATUSBAR_HEIGHT + 5) dialogY = STATUSBAR_HEIGHT + 5;
+					
+					// 检查是否点击在对话框内部
+					BOOL clickedInside = (x >= dialogX && x <= dialogX + dialogWidth && 
+										  y >= dialogY && y <= dialogY + dialogHeight);
+					
+					if (!clickedInside) {
+						// 点击外部关闭对话框
+						showNetworkConfigDialog = FALSE;
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					// ---- 对话框内部点击 ----
+					
+					// 网络列表点击
+					int listStartY = dialogY + 45 + 28 + 10 + 15 + 22;
+					int listHeight = 110;
+					if (y >= listStartY && y <= listStartY + listHeight) {
+						int idx = (y - listStartY - 3) / 26;
+						if (idx >= 0 && idx < networkScanCount) {
+							selectedNetworkIndex = idx;
+							char savedPwd[100] = "";
+							if (GetSavedPassword(networkScanResults[idx], savedPwd, sizeof(savedPwd))) {
+								strcpy(wifiPasswordInput, savedPwd);
+								isWifiPasswordMode = TRUE;
+							} else {
+								strcpy(wifiPasswordInput, "");
+								isWifiPasswordMode = FALSE;
+							}
+							networkDialogFocus = 1;
+							connectStatusMsg[0] = '\0';
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+					}
+					
+					// 密码输入框和按钮
+					if (selectedNetworkIndex >= 0) {
+						int contentY = listStartY + listHeight + 10 + 12;
+						
+						// 密码输入框点击
+						RECT pwdRect = {dialogX + 65, contentY - 2, dialogX + dialogWidth - 15, contentY + 24};
+						if (x >= pwdRect.left && x <= pwdRect.right && y >= pwdRect.top && y <= pwdRect.bottom) {
+							networkDialogFocus = 1;
+							InvalidateRect(hwnd, NULL, TRUE);
+							return 0;
+						}
+						
+						// 连接按钮
+						int btnY = contentY + 35;
+						RECT connectBtn = {dialogX + 15, btnY, dialogX + 100, btnY + 30};
+						if (x >= connectBtn.left && x <= connectBtn.right && y >= connectBtn.top && y <= connectBtn.bottom) {
+							if (selectedNetworkIndex >= 0 && selectedNetworkIndex < networkScanCount) {
+								const char* ssid = networkScanResults[selectedNetworkIndex];
+								const char* password = wifiPasswordInput;
+								
+								if (ConnectToNetwork(ssid, password)) {
+									GetNetworkIPInfo(ssid);
+									sprintf(connectStatusMsg, "已连接到 %s", ssid);
+									connectStatusTime = GetTickCount();
+									isNetworkConnected = TRUE;
+									strcpy(networkStatus, ssid);
+									g_networkConfig.connected = TRUE;
+								} else {
+									sprintf(connectStatusMsg, "连接 %s 失败", ssid);
+									connectStatusTime = GetTickCount();
+								}
+								InvalidateRect(hwnd, NULL, TRUE);
+							}
+							return 0;
+						}
+						
+						// 断开按钮
+						if (g_networkConfig.connected) {
+							RECT disconnectBtn = {dialogX + 115, btnY, dialogX + 200, btnY + 30};
+							if (x >= disconnectBtn.left && x <= disconnectBtn.right && y >= disconnectBtn.top && y <= disconnectBtn.bottom) {
+								DisconnectNetwork();
+								strcpy(connectStatusMsg, "已断开网络");
+								connectStatusTime = GetTickCount();
+								InvalidateRect(hwnd, NULL, TRUE);
+								return 0;
+							}
+						}
+					}
+					
+					// 刷新按钮
+					int bottomY = dialogY + dialogHeight - 38;
+					RECT refreshBtn = {dialogX + 15, bottomY, dialogX + 85, bottomY + 28};
+					if (x >= refreshBtn.left && x <= refreshBtn.right && y >= refreshBtn.top && y <= refreshBtn.bottom) {
+						networkScanCount = 0;
+						g_networkConfig.lastUpdateTime = 0;
+						strcpy(connectStatusMsg, "正在扫描...");
+						connectStatusTime = GetTickCount();
+						InvalidateRect(hwnd, NULL, TRUE);
+						return 0;
+					}
+					
+					return 0;
+				}
+				// ============================================================
+				// 网络对话框处理结束
+				// ============================================================
+				
+				// ============================================================
+				// 状态栏图标点击处理（网络、音量、显示、设置、电池、通知）
 				// ============================================================
 				if (y <= STATUSBAR_HEIGHT) {
 					int iconStartX = 94;
@@ -14394,8 +15468,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					}
 					
 					// 网络图标
-					if (x >= iconStartX && x <= iconStartX + iconSize) {
-						showNetworkSettings = !showNetworkSettings;
+					if (x >= iconStartX && x <= iconStartX + iconSize && y >= 0 && y <= STATUSBAR_HEIGHT) {
+						showNetworkConfigDialog = !showNetworkConfigDialog;
+						if (showNetworkConfigDialog) {
+							networkScanCount = 0;
+							selectedNetworkIndex = -1;
+							strcpy(wifiPasswordInput, "");
+							isWifiPasswordMode = FALSE;
+							networkDialogFocus = 0;
+							connectStatusMsg[0] = '\0';
+						}
 						showVolumeSlider = FALSE;
 						showDisplaySettings = FALSE;
 						showBatterySettings = FALSE;
@@ -14487,14 +15569,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					}
 				}
 				// ============================================================
-				//  【新增结束】
+				// 状态栏图标点击处理结束
 				// ============================================================
 				
 				// ============================================================
-				//  【新增】弹出面板交互（音量滑块、亮度调整）
+				// 弹出面板交互（音量滑块、亮度调整）
 				// ============================================================
 				// 音量滑块交互
-				// 音量滑块交互（真实控制）
 				if (showVolumeSlider) {
 					int sliderX = 94 + STATUSBAR_ICON_SIZE + STATUSBAR_ICON_SPACING;
 					if (x >= sliderX && x <= sliderX + 120 && y >= STATUSBAR_HEIGHT && y <= STATUSBAR_HEIGHT+60 ) {
@@ -14503,17 +15584,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 							volumeLevel = relX;
 							if (volumeLevel < 0) volumeLevel = 0;
 							if (volumeLevel > 100) volumeLevel = 100;
-							
-							// 【新增】设置真实系统音量
 							SetSystemVolume(volumeLevel);
-							
 							InvalidateRect(hwnd, NULL, TRUE);
 							return 0;
 						}
 						// 静音按钮
 						if (x >= sliderX + 10 && x <= sliderX + 60 && y >= 45 && y <= 60) {
 							isMuted = !isMuted;
-							// 【新增】真实静音控制
 							ToggleMute();
 							InvalidateRect(hwnd, NULL, TRUE);
 							return 0;
@@ -14526,17 +15603,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					if (x >= displayX && x <= displayX + 150 && y >= STATUSBAR_HEIGHT && y <= STATUSBAR_HEIGHT + 84) {
 						brightnessLevel = (brightnessLevel + 10) % 110;
 						if (brightnessLevel > 100) brightnessLevel = 100;
-						
 						SetMonitorBrightness(brightnessLevel);
 						InvalidateRect(hwnd, NULL, TRUE);
 						return 0;
 					}
 				}
 				// ============================================================
-				//  【新增结束】
+				// 弹出面板交互结束
 				// ============================================================
 				
-				// ---- 开始菜单点击处理 ----
+				// ============================================================
+				// 开始菜单点击处理
+				// ============================================================
 				if (showStartMenu) {
 					int menuX = 0;
 					int menuY = STATUSBAR_HEIGHT + STARTMENU_PADDING;
@@ -14562,8 +15640,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					CloseStartMenu();
 					return 0;
 				}
+				// ============================================================
+				// 开始菜单点击处理结束
+				// ============================================================
 				
-				// ---- 原有桌面按钮处理 ----
+				// ============================================================
+				// 任务栏按钮点击处理
+				// ============================================================
 				int buttonWidth = 100;
 				int buttonHeight = 40;
 				int buttonY = 10;
@@ -14666,7 +15749,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 					InvalidateRect(hwnd, &shutdownRect, TRUE);
 					return 0;
 				}
+				// ============================================================
+				// 任务栏按钮点击处理结束
+				// ============================================================
 			}
+			
 			else if (showCDKeyScreen) {
 				int centerX = GetSystemMetrics(SM_CXSCREEN) / 2;
 				int centerY = GetSystemMetrics(SM_CYSCREEN) / 2;

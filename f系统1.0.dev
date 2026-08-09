@@ -65,8 +65,20 @@ SyncProduct = 1
 
 
 [Unit1]
-FileName = main.cpp
+FileName = f1.0_private.rc
 CompileCpp = 1
+Folder = Resources
+Compile = 1
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = UTF-8
+
+
+[Unit2]
+FileName = main.cpp
 Folder = 
 Compile = 1
 Link = 1
@@ -75,10 +87,11 @@ OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = UTF-8
 RealEncoding = UTF-8
+CompileCpp = 1
 
 
-[Unit2]
-FileName = f系统1.0.layout
+[Unit3]
+FileName = f系统1.0.ico
 Folder = 
 Compile = 0
 Link = 0
@@ -88,19 +101,6 @@ BuildCmd =
 FileEncoding = PROJECT
 RealEncoding = ASCII
 CompileCpp = 1
-
-
-[Unit3]
-FileName = LICENSE
-Folder = 
-Compile = 0
-Link = 0
-Priority = 1000
-OverrideBuildCmd = 0
-BuildCmd = 
-FileEncoding = PROJECT
-RealEncoding = ASCII
-CompileCpp = 0
 
 
 [Unit4]
@@ -117,7 +117,7 @@ RealEncoding = UTF-8
 
 
 [Unit5]
-FileName = test_byte_error.txt
+FileName = Makefile.win
 Folder = 
 Compile = 0
 Link = 0
@@ -130,7 +130,7 @@ CompileCpp = 1
 
 
 [Unit6]
-FileName = Makefile.win
+FileName = test_byte_error.txt
 Folder = 
 Compile = 0
 Link = 0
@@ -143,7 +143,7 @@ CompileCpp = 0
 
 
 [Unit7]
-FileName = f系统1.0.ico
+FileName = LICENSE
 Folder = 
 Compile = 0
 Link = 0
@@ -156,15 +156,15 @@ CompileCpp = 0
 
 
 [Unit8]
-FileName = f1.0_private.rc
-Folder = Resources
-Compile = 1
+FileName = f系统1.0.layout
+Folder = 
+Compile = 0
 Link = 0
 Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = UTF-8
+RealEncoding = ASCII
 CompileCpp = 0
 
 

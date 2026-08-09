@@ -3,12 +3,14 @@ chcp 65001 >nul
 title 编译 jellyfish-cli - 水母工作室
 
 cls
-echo.
-echo  ^+---------------------------------------^+
-echo  ^|    水母工作室 / Jellyfish Studio       ^|
-echo  ^+---------------------------------------^+
-echo.
-echo  编译目标: jellyfish-cli.exe
+echo ========================================
+echo jellyfish-cli 编译脚本
+echo ========================================
+echo 果冻鱼工作室 jellyfish-cli 官方编译脚本
+echo 水母严选，必是佳品
+echo 任何从非GitHub fSystem谷仓中下载的编译脚本都是盗版
+echo 准备完成！
+echo ========================================
 echo.
 
 if not exist "jellyfish-cli.cpp" (

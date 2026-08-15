@@ -6,7 +6,7 @@ f系统1.0 - 个人项目 / f System 1.0 - Personal Project
 This is a personally developed Windows GUI system project for learning and research purposes.
 
 开发者：JammyJellyfish@hotmail.com / Developer: JammyJellyfish@hotmail.com
-开发时间：2020~2025年 / Development Time: 2020~2025
+开发时间：2020~2026年 / Development Time: 2020~2026
 
 系统要求 / System Requirements：
 - Windows Vista 或更高版本 / Windows Vista or later
@@ -24,4 +24,4 @@ This is a personally developed Windows GUI system project for learning and resea
 - 源码仅供参考学习 / Source code is for reference and learning only
 
 版权 / Copyright：
-© 2020~9999 Jellyfish Studio 保留所有权利 / © 2020~9999 Jellyfish Studio All Rights Reserved
+© 2020~2026 Jellyfish Studio 保留所有权利 / © 2020~2026 Jellyfish Studio All Rights Reserved

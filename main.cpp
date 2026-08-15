@@ -46,6 +46,7 @@
 //31/07/26 12:01:实现了AI训练器，使用nunn库，但出现了编译器无法编译状况，需使用专门的编译bat文件（跟目录有），暂未支持输入中文（只支持数字），训练文件暂时为存储进本地，版本bete1
 //05/08/26 19:04:时钟回归(任务栏版本bete2),碰撞箱未修复
 //05/08/26 20:11:网络调节真实实现
+//15/08/26 10:46:实现了加密储存配置文件
 
 #include <windows.h>
 #include <string.h>
@@ -87,6 +88,25 @@
 #pragma comment(lib, "ole32.lib")
 #include <physicalmonitorenumerationapi.h>
 #include <highlevelmonitorconfigurationapi.h>
+
+// ============================================================
+// 加密函数声明（来自 encrypt.cpp）
+// ============================================================
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+	
+// 加密配置字符串
+	char* EncryptConfigString(const char* plaintext, const char* password);
+// 解密配置字符串
+	char* DecryptConfigString(const char* ciphertext_hex, const char* password);
+// 释放内存
+	void FreeEncryptMemory(char* ptr);
+	
+#ifdef __cplusplus
+}
+#endif
 
 // ==================== AI模块 ====================
 // 直接使用Nunn库
@@ -8843,45 +8863,45 @@ BOOL IsFeatureAvailable(int feature) {
 
 // 检测游戏激活组合键
 void CheckGameActivation(WPARAM wParam, HWND hwnd) {
-    static BOOL ctrlPressed = FALSE;
-    static BOOL jPressed = FALSE;
-    
-    if (wParam == VK_CONTROL) {
-        ctrlPressed = TRUE;
-    } else if (wParam == 'J' || wParam == 'j') {
-        jPressed = TRUE;
-    }
-    
-    // 检测Ctrl+J组合
-    if (ctrlPressed && jPressed) {
-        // 激活游戏
-        showGameEgg = TRUE;
-        showFinalEgg = FALSE;
-        showCalculator = FALSE;
-        showDesktop = FALSE;
-        
-        // 初始化游戏
-        if (!gameInitialized) {
-            InitializeJellyfishGame();
-            gameInitialized = TRUE;
-        }
-        
-        // 设置游戏定时器
-        SetTimer(hwnd, 9, 50, NULL);
-        
-        InvalidateRect(hwnd, NULL, TRUE);
-        
-        // 重置按键状态
-        ctrlPressed = FALSE;
-        jPressed = FALSE;
-    }
-    
-    // 处理按键释放
-    if (wParam == VK_CONTROL) {
-        ctrlPressed = FALSE;
-    } else if (wParam == 'J' || wParam == 'j') {
-        jPressed = FALSE;
-    }
+	static BOOL ctrlPressed = FALSE;
+	static BOOL dPressed = FALSE;  // 改为 dPressed
+	
+	if (wParam == VK_CONTROL) {
+		ctrlPressed = TRUE;
+	} else if (wParam == 'D' || wParam == 'd') {  // 改为检测 D 键
+		dPressed = TRUE;
+	}
+	
+	// 检测Ctrl+D组合
+	if (ctrlPressed && dPressed) {  // 改为 dPressed
+		// 激活游戏
+		showGameEgg = TRUE;
+		showFinalEgg = FALSE;
+		showCalculator = FALSE;
+		showDesktop = FALSE;
+		
+		// 初始化游戏
+		if (!gameInitialized) {
+			InitializeJellyfishGame();
+			gameInitialized = TRUE;
+		}
+		
+		// 设置游戏定时器
+		SetTimer(hwnd, 9, 50, NULL);
+		
+		InvalidateRect(hwnd, NULL, TRUE);
+		
+		// 重置按键状态
+		ctrlPressed = FALSE;
+		dPressed = FALSE;  // 改为 dPressed
+	}
+	
+	// 处理按键释放
+	if (wParam == VK_CONTROL) {
+		ctrlPressed = FALSE;
+	} else if (wParam == 'D' || wParam == 'd') {  // 改为检测 D 键
+		dPressed = FALSE;  // 改为 dPressed
+	}
 }
 
 // 初始化水母游戏
@@ -10344,46 +10364,172 @@ void HandleGuessInput(char key) {
     }
 }
 
-// 保存配置到文件
+// 保存配置到文件（使用加密）
 void SaveConfig() {
-    FILE* file = fopen(CONFIG_FILE, "wb");
-    if (file) {
-        fwrite(&isFirstBoot, sizeof(BOOL), 1, file);
-        fwrite(username, sizeof(char), 50, file);
-        fwrite(password, sizeof(char), 50, file);
-        fwrite(computerName, sizeof(char), 50, file);
-        fwrite(&isActivated, sizeof(BOOL), 1, file);
-        fwrite(&isTrialMode, sizeof(BOOL), 1, file);
-        fwrite(&trialDaysRemaining, sizeof(int), 1, file);
-        fwrite(&showGameButton, sizeof(BOOL), 2, file);
-        fwrite(&currentThemeIndex, sizeof(int), 1, file);
-        fclose(file);
-    }
+	FILE* file = fopen(CONFIG_FILE, "wb");
+	if (file) {
+		// 使用固定密码（系统内部密钥）
+		const char* systemKey = "FOS_INTERNAL_KEY_2026";
+		
+		// 配置文件版本
+		int version = 3; // v3: 使用 encrypt.cpp 加密
+		fwrite(&version, sizeof(int), 1, file);
+		
+		fwrite(&isFirstBoot, sizeof(BOOL), 1, file);
+		fwrite(&isActivated, sizeof(BOOL), 1, file);
+		fwrite(&isTrialMode, sizeof(BOOL), 1, file);
+		fwrite(&trialDaysRemaining, sizeof(int), 1, file);
+		fwrite(&showGameButton, sizeof(BOOL), 2, file);
+		fwrite(&currentThemeIndex, sizeof(int), 1, file);
+		
+		// 加密用户名
+		char* encrypted = EncryptConfigString(username, systemKey);
+		if (encrypted) {
+			int len = strlen(encrypted) + 1;
+			fwrite(&len, sizeof(int), 1, file);
+			fwrite(encrypted, 1, len, file);
+			FreeEncryptMemory(encrypted);
+		} else {
+			int len = 0;
+			fwrite(&len, sizeof(int), 1, file);
+		}
+		
+		// 加密密码
+		encrypted = EncryptConfigString(password, systemKey);
+		if (encrypted) {
+			int len = strlen(encrypted) + 1;
+			fwrite(&len, sizeof(int), 1, file);
+			fwrite(encrypted, 1, len, file);
+			FreeEncryptMemory(encrypted);
+		} else {
+			int len = 0;
+			fwrite(&len, sizeof(int), 1, file);
+		}
+		
+		// 加密计算机名
+		encrypted = EncryptConfigString(computerName, systemKey);
+		if (encrypted) {
+			int len = strlen(encrypted) + 1;
+			fwrite(&len, sizeof(int), 1, file);
+			fwrite(encrypted, 1, len, file);
+			FreeEncryptMemory(encrypted);
+		} else {
+			int len = 0;
+			fwrite(&len, sizeof(int), 1, file);
+		}
+		
+		fclose(file);
+		DebugLog("配置已加密保存 (版本 %d)", version);
+	} else {
+		DebugLog("警告: 无法保存配置文件");
+	}
 }
 
-// 从文件加载配置
+// 从文件加载配置（使用解密）
 void LoadConfig() {
-    FILE* file = fopen(CONFIG_FILE, "rb");
-    if (file) {
-        fread(&isFirstBoot, sizeof(BOOL), 1, file);
-        fread(username, sizeof(char), 50, file);
-        fread(password, sizeof(char), 50, file);
-        fread(computerName, sizeof(char), 50, file);
-        fread(&isActivated, sizeof(BOOL), 1, file);
-        fread(&isTrialMode, sizeof(BOOL), 1, file);
-        fread(&trialDaysRemaining, sizeof(int), 1, file);
-        fread(&showGameButton, sizeof(BOOL), 2, file);
-        fread(&currentThemeIndex, sizeof(int), 1, file);
-        fclose(file);
-    } else {
-        // 设置默认值
-        strcpy(username, "User");
-        strcpy(password, "1234");
-        strcpy(computerName, "FOS-PC");
-        isFirstBoot = TRUE;
-        showGameButton = FALSE;
-        currentThemeIndex = 0;
-    }
+	FILE* file = fopen(CONFIG_FILE, "rb");
+	if (file) {
+		const char* systemKey = "FOS_INTERNAL_KEY_2026";
+		
+		// 读取版本号
+		int version = 0;
+		if (fread(&version, sizeof(int), 1, file) != 1) {
+			fclose(file);
+			// 设置默认值
+			strcpy(username, "User");
+			strcpy(password, "1234");
+			strcpy(computerName, "FOS-PC");
+			isFirstBoot = TRUE;
+			showGameButton = FALSE;
+			currentThemeIndex = 0;
+			DebugLog("配置文件损坏，使用默认值");
+			return;
+		}
+		
+		// 读取标志位
+		fread(&isFirstBoot, sizeof(BOOL), 1, file);
+		fread(&isActivated, sizeof(BOOL), 1, file);
+		fread(&isTrialMode, sizeof(BOOL), 1, file);
+		fread(&trialDaysRemaining, sizeof(int), 1, file);
+		fread(&showGameButton, sizeof(BOOL), 2, file);
+		fread(&currentThemeIndex, sizeof(int), 1, file);
+		
+		// 如果版本低于3，使用旧格式读取
+		if (version < 3) {
+			// 旧格式（明文）
+			fseek(file, 0, SEEK_SET);
+			fread(&version, sizeof(int), 1, file); // 重新读取
+			fread(&isFirstBoot, sizeof(BOOL), 1, file);
+			fread(username, sizeof(char), 50, file);
+			fread(password, sizeof(char), 50, file);
+			fread(computerName, sizeof(char), 50, file);
+			fread(&isActivated, sizeof(BOOL), 1, file);
+			fread(&isTrialMode, sizeof(BOOL), 1, file);
+			fread(&trialDaysRemaining, sizeof(int), 1, file);
+			fread(&showGameButton, sizeof(BOOL), 2, file);
+			fread(&currentThemeIndex, sizeof(int), 1, file);
+			fclose(file);
+			DebugLog("使用旧格式加载配置");
+			return;
+		}
+		
+		// 读取加密的用户名
+		int len1 = 0;
+		fread(&len1, sizeof(int), 1, file);
+		if (len1 > 0 && len1 < 10000) {
+			char* encrypted = (char*)malloc(len1);
+			fread(encrypted, 1, len1, file);
+			char* decrypted = DecryptConfigString(encrypted, systemKey);
+			if (decrypted) {
+				strncpy(username, decrypted, 49);
+				username[49] = '\0';
+				FreeEncryptMemory(decrypted);
+			}
+			free(encrypted);
+		}
+		
+		// 读取加密的密码
+		int len2 = 0;
+		fread(&len2, sizeof(int), 1, file);
+		if (len2 > 0 && len2 < 10000) {
+			char* encrypted = (char*)malloc(len2);
+			fread(encrypted, 1, len2, file);
+			char* decrypted = DecryptConfigString(encrypted, systemKey);
+			if (decrypted) {
+				strncpy(password, decrypted, 49);
+				password[49] = '\0';
+				FreeEncryptMemory(decrypted);
+			}
+			free(encrypted);
+		}
+		
+		// 读取加密的计算机名
+		int len3 = 0;
+		fread(&len3, sizeof(int), 1, file);
+		if (len3 > 0 && len3 < 10000) {
+			char* encrypted = (char*)malloc(len3);
+			fread(encrypted, 1, len3, file);
+			char* decrypted = DecryptConfigString(encrypted, systemKey);
+			if (decrypted) {
+				strncpy(computerName, decrypted, 49);
+				computerName[49] = '\0';
+				FreeEncryptMemory(decrypted);
+			}
+			free(encrypted);
+		}
+		
+		fclose(file);
+		DebugLog("配置加载成功 (版本 %d)", version);
+	} else {
+		// 设置默认值
+		strcpy(username, "User");
+		strcpy(password, "1234");
+		strcpy(computerName, "FOS-PC");
+		isFirstBoot = TRUE;
+		showGameButton = FALSE;
+		currentThemeIndex = 0;
+		DebugLog("配置文件不存在，使用默认值");
+	}
 }
 
 // 验证登录
@@ -11408,7 +11554,7 @@ void DrawFinalEgg(HDC hdc, int centerX, int centerY) {
     SetTextColor(hdc, RGB(100, 100, 200));
     TextOut(hdc, centerX - 180, textY, "特别提示：水母游戏按钮已解锁！", 28);
     textY += 30;
-    TextOut(hdc, centerX - 180, textY, "返回桌面开始游戏吧！", 20);
+    TextOut(hdc, centerX - 180, textY, "返回桌面找找按钮吧！", 20);
     textY += 40;
     
     

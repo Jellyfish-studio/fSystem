@@ -36,8 +36,8 @@ pause >nul
 echo.
 
 :: ========== 配置 ==========
-set OFFICIAL_DATE=2026/08/09
-set OFFICIAL_SIZE=618967
+set OFFICIAL_DATE=2026/08/15
+set OFFICIAL_SIZE=622960
 :: ===========================
 
 if not exist "main.cpp" (

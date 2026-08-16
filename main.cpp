@@ -620,7 +620,7 @@ void* DebugRealloc(void* ptr, size_t size, const char* file, int line) {
             curr = curr->next;
         }
     }
-    
+	
     void* newPtr = realloc(ptr, size);
     if (newPtr) {
         MemBlock* block = (MemBlock*)malloc(sizeof(MemBlock));

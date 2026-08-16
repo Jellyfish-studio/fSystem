@@ -13,40 +13,44 @@ echo 准备完成！
 echo ========================================
 echo.
 
-set "GXX=C:\Program Files\RedPanda-Cpp\mingw64\bin\g++.exe"
+REM ---- 设置中文环境（尝试让 g++ 输出中文报错） ----
+set LANG=zh_CN.UTF-8
+set LC_ALL=zh_CN.UTF-8
+
+REM ---- 编译参数 ----
 set FLAGS=-std=c++17 -O2 -finput-charset=UTF-8 -fexec-charset=gbk
 set INC=-I"nunn-1.56\nunn"
 
 echo [1/8] 编译 main.cpp...
-"%GXX%" -c main.cpp -o main.o %INC% %FLAGS%
+g++ -c main.cpp -o main.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [2/8] 编译 encrypt.cpp...
-"%GXX%" -c encrypt.cpp -o encrypt.o %INC% %FLAGS%
+g++ -c encrypt.cpp -o encrypt.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [3/8] 编译 nu_mlpnn.cc...
-"%GXX%" -c nunn-1.56\nunn\nu_mlpnn.cc -o nu_mlpnn.o %INC% %FLAGS%
+g++ -c nunn-1.56\nunn\nu_mlpnn.cc -o nu_mlpnn.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [4/8] 编译 nu_rmlpnn.cc...
-"%GXX%" -c nunn-1.56\nunn\nu_rmlpnn.cc -o nu_rmlpnn.o %INC% %FLAGS%
+g++ -c nunn-1.56\nunn\nu_rmlpnn.cc -o nu_rmlpnn.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [5/8] 编译 nu_perceptron.cc...
-"%GXX%" -c nunn-1.56\nunn\nu_perceptron.cc -o nu_perceptron.o %INC% %FLAGS%
+g++ -c nunn-1.56\nunn\nu_perceptron.cc -o nu_perceptron.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [6/8] 编译 nu_hopfieldnn.cc...
-"%GXX%" -c nunn-1.56\nunn\nu_hopfieldnn.cc -o nu_hopfieldnn.o %INC% %FLAGS%
+g++ -c nunn-1.56\nunn\nu_hopfieldnn.cc -o nu_hopfieldnn.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [7/8] 编译 nu_costfuncs.cc...
-"%GXX%" -c nunn-1.56\nunn\nu_costfuncs.cc -o nu_costfuncs.o %INC% %FLAGS%
+g++ -c nunn-1.56\nunn\nu_costfuncs.cc -o nu_costfuncs.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
 echo [8/8] 链接生成 f系统1.0.exe...
-"%GXX%" main.o encrypt.o nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o f1.0_private.res -o "f系统1.0.exe" -mwindows -lwinmm -limm32 -lole32 -lwlanapi -liphlpapi -static -static-libgcc -static-libstdc++
+g++ main.o encrypt.o nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o f1.0_private.res -o "f系统1.0.exe" -mwindows -lwinmm -limm32 -lole32 -lwlanapi -liphlpapi -static -static-libgcc -static-libstdc++
 if errorlevel 1 goto error
 
 echo.

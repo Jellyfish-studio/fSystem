@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>f系统 0.0.01b · 阳间版演示</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            font-family: 'Segoe UI', '微软雅黑', 'Arial', sans-serif;
+        }
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: #1a0b2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #desktop {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #ffc8dc;
+            transition: background 0.3s;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* ===== 通用工具类 ===== */
+        .hidden { display: none !important; }
+
+        /* ===== 启动动画层 ===== */
+        .launcher-screen {
+            position: absolute;
+            inset: 0;
+            background: #1a0b2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 3000;
+            transition: opacity 0.6s;
+            pointer-events: none;
+            opacity: 1;
+        }
+        .launcher-screen.hidden { opacity: 0; pointer-events: none; }
+        .jellyfish-big {
+            font-size: 80px;
+            animation: float 3s infinite ease-in-out;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(-2deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+            100% { transform: translateY(0px) rotate(-2deg); }
+        }
+        .logo-text {
+            font-size: 38px;
+            font-weight: bold;
+            letter-spacing: 6px;
+            margin: 10px 0;
+            color: #fff;
+        }
+        .quote {
+            font-size: 18px;
+            color: #e9d5ff;
+            font-style: italic;
+            margin: 8px;
+        }
+        .progress-bar {
+            width: 300px;
+            height: 12px;
+            background: #3d2a5a;
+            border-radius: 6px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #8b5cf6;
+            transition: width 0.1s;
+        }
+
+        /* ===== 安装向导 ===== */
+        .install-screen {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, #0b1a3a 0%, #1a3a6a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2500;
+            color: white;
+            padding: 20px;
+        }
+        .install-box {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #5a7a9a;
+            border-radius: 12px;
+            padding: 30px 40px;
+            max-width: 700px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+        }
+        .install-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: #fff;
+        }
+        .install-content {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #c8d8f0;
+            white-space: pre-wrap;
+            text-align: left;
+            margin-bottom: 24px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+        .install-ad {
+            font-size: 14px;
+            color: #aab8d0;
+            font-style: italic;
+            margin-bottom: 12px;
+        }
+        .install-progress-wrap {
+            width: 100%;
+            height: 16px;
+            background: #2a3a5a;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #4a6a8a;
+            margin-bottom: 8px;
+        }
+        .install-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #5ab0ff, #aad4ff);
+            transition: width 0.2s;
+        }
+        .install-status {
+            font-size: 13px;
+            color: #8aa8c8;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .install-hint {
+            font-size: 12px;
+            color: #6a8aa8;
+            margin-top: 12px;
+        }
+        .install-btn {
+            background: #2a6aaa;
+            border: none;
+            color: white;
+            padding: 10px 28px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .install-btn:hover { background: #3a8acc; }
+        .install-btn:active { background: #1a5a9a; }
+
+        /* ===== 登录界面 ===== */
+        .login-screen {
+            position: absolute;
+            inset: 0;
+            background: #1e3c78;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 1500;
+        }
+        .login-box {
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 300px;
+            border: 1px solid #4a6a9a;
+        }
+        .login-box input {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #aaa;
+            font-size: 16px;
+        }
+        .login-btn {
+            background: #3cba54;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            color: white;
+        }
+        .login-btn:hover { background: #2e9e44; }
+
+        /* ===== 任务栏 ===== */
+        #taskbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: #3c3c3c;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 6px;
+            z-index: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            flex-wrap: wrap;
+            border-bottom: 1px solid #6a6a6a;
+        }
+        .task-btn {
+            background: #505050;
+            color: white;
+            border: 1px solid #888;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.1s;
+            min-width: 70px;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+        .task-btn:hover { background: #646464; }
+        .task-btn:active { background: #787878; }
+        .task-btn.active { background: #8b5cf6; }
+
+        .status-icons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 10px;
+            color: white;
+            font-size: 16px;
+        }
+        .status-icons span {
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            position: relative;
+        }
+        .status-icons span:hover { background: #5a5a5a; }
+
+        .time-area {
+            margin-left: auto;
+            display: flex;
+            gap: 16px;
+            color: white;
+            font-size: 14px;
+            background: #2a2a2a;
+            padding: 6px 12px;
+            border-radius: 6px;
+        }
+        .copyright {
+            font-size: 12px;
+            color: #b0b0c0;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+
+        /* ===== 桌面内容区 ===== */
+        #desktopArea {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #ffc8dc;
+            padding: 10px;
+            overflow: auto;
+        }
+
+        /* ===== 应用窗口 ===== */
+        .app-window {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #f0f0f0;
+            border: 2px solid #6464c8;
+            border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            min-width: 400px;
+            max-width: 90vw;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1000;
+            background: #fff;
+        }
+        .app-title {
+            background: #1e3c78;
+            color: white;
+            padding: 8px 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: move;
+        }
+        .app-title .close-btn {
+            margin-left: auto;
+            background: #d44;
+            border: none;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .app-content {
+            padding: 12px;
+            overflow: auto;
+            flex: 1;
+            background: #fafaff;
+        }
+
+        /* ===== 计算器 ===== */
+        .calc-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .calc-btn {
+            background: #dcdcdc;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            padding: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+        .calc-btn.op { background: #b4b4dc; }
+        .calc-btn:active { background: #bbb; }
+        .calc-display {
+            background: white;
+            border: 1px solid #aaa;
+            padding: 10px;
+            font-size: 24px;
+            text-align: right;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            font-family: monospace;
+        }
+
+        /* ===== 文件管理器 ===== */
+        .file-command {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .file-command input {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .file-output {
+            background: #f4f4f4;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow: auto;
+        }
+
+        /* ===== 弹出面板 ===== */
+        .popup-panel {
+            position: absolute;
+            top: 64px;
+            background: #1e1e32;
+            border: 1px solid #5a5a8a;
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            z-index: 600;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+            min-width: 180px;
+        }
+        .popup-panel .popup-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #4a4a6a;
+            padding-bottom: 6px;
+        }
+        .popup-panel .popup-item {
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .popup-panel .popup-item:hover { background: #3a4a7a; }
+
+        /* 通知角标 */
+        .notification-badge {
+            background: #f44;
+            color: white;
+            border-radius: 50%;
+            padding: 0 5px;
+            font-size: 11px;
+            margin-left: 2px;
+            display: inline-block;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        /* ===== 紫屏错误 ===== */
+        .purple-screen {
+            position: absolute;
+            inset: 0;
+            background: #500078;
+            color: white;
+            padding: 30px;
+            font-family: 'Consolas', monospace;
+            z-index: 5000;
+            overflow: auto;
+        }
+        .purple-screen h2 { color: #ff5050; }
+        .purple-screen .code { color: #ffcc66; font-size: 24px; }
+        .purple-screen .hint { color: #aaf; margin-top: 20px; }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #e0e0e0; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        /* 开关 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #ccc;
+            transition: .2s;
+            border-radius: 22px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #2a6aaa; }
+        input:checked + .slider:before { transform: translateX(18px); }
+    </style>
+</head>
+<body>
+    <div id="desktop">
+        <!-- ========== 启动动画 ========== -->
+        <div id="launcherScreen" class="launcher-screen">
+            <div class="jellyfish-big">🐙</div>
+            <div class="logo-text">JELLYFISH STUDIO</div>
+            <div class="quote" id="quoteText">今天天气真好。</div>
+            <div class="progress-bar"><div class="progress-fill" id="launcherProgress"></div></div>
+            <div style="margin-top:12px;font-size:14px;color:#aaf;" id="launcherStatus">正在数水母...</div>
+            <div style="position:absolute;bottom:20px;left:20px;font-size:12px;color:#88a;">v0.0.01b · sunlight-edition</div>
+        </div>
+
+        <!-- ========== 安装向导 ========== -->
+        <div id="installScreen" class="install-screen hidden">
+            <div class="install-box">
+                <div class="install-title" id="installTitle">欢迎来到水母工作室</div>
+                <div class="install-content" id="installContent">欢迎使用 Jellyfish Studio 阳间版系统。</div>
+                <div class="install-ad" id="installAd">水母工作室 · 一个你可以放心打开的地方。</div>
+                <div class="install-progress-wrap"><div class="install-progress-fill" id="installProgressFill"></div></div>
+                <div class="install-status">
+                    <span id="installStatus">正在初始化...</span>
+                    <span id="installPercent">0%</span>
+                </div>
+                <div class="install-hint">
+                    <span>空格: 暂停/继续</span> &nbsp;|&nbsp;
+                    <span>Enter: 跳过当前页面</span> &nbsp;|&nbsp;
+                    <span id="installSlideNum">1 / 20</span>
+                </div>
+                <div style="margin-top:16px;">
+                    <button class="install-btn" id="installSkipBtn">跳过安装</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 登录界面 ========== -->
+        <div id="loginScreen" class="login-screen hidden">
+            <div class="login-box">
+                <h2 style="margin:0;text-align:center;">f系统 0.0.01b</h2>
+                <div style="text-align:center;font-size:14px;opacity:0.8;">用户会话登录</div>
+                <input type="text" id="loginUser" placeholder="用户名" value="User">
+                <input type="password" id="loginPass" placeholder="密码" value="1234">
+                <button class="login-btn" id="loginBtn">登 录</button>
+                <div id="loginError" style="color:#ff8888;font-size:14px;height:20px;"></div>
+            </div>
+            <div style="position:absolute;bottom:20px;left:20px;font-size:12px;color:#aaf;">(C) Jellyfish Studio 2020-2030</div>
+        </div>
+
+        <!-- ========== 任务栏 ========== -->
+        <div id="taskbar" class="hidden">
+            <button class="task-btn" id="btnStart">开始</button>
+            <div class="status-icons">
+                <span id="iconNetwork" title="网络">📶</span>
+                <span id="iconVolume" title="音量">🔊</span>
+                <span id="iconDisplay" title="显示">🖥️</span>
+                <span id="iconSettings" title="设置">⚙️</span>
+                <span id="iconBattery" title="电池">🔋</span>
+                <span id="iconNotify" title="通知">🔔<span class="notification-badge hidden" id="notifyBadge">0</span></span>
+            </div>
+            <span class="copyright">(C) 果冻鱼工作室 Jellyfish Studio</span>
+            <div class="time-area">
+                <span id="taskDate">2026-01-01</span>
+                <span id="taskTime">00:00:00</span>
+            </div>
+        </div>
+
+        <!-- ========== 桌面内容区 ========== -->
+        <div id="desktopArea" class="hidden">
+            <div id="windowsContainer"></div>
+        </div>
+
+        <!-- ========== 紫屏错误 ========== -->
+        <div id="purpleScreen" class="purple-screen hidden">
+            <h2>!!! f系统遇到致命错误 (DEBUG模式) !!!</h2>
+            <div class="code" id="errorCodeDisplay">0xF0000001</div>
+            <div id="errorMessageDisplay" style="margin:20px 0;white-space:pre-wrap;font-size:16px;color:#ffcccc;"></div>
+            <div class="hint">按 Ctrl+Alt+E 关闭系统 (模拟重启)</div>
+            <div class="hint" style="color:#ffaa66;margin-top:30px;">连Jellyfish Studio的核心成员小水母也救不了这个错误...</div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ==================== 全局状态 ====================
+            const state = {
+                isLoggedIn: false,
+                currentUser: 'User',
+                password: '1234',
+                showStartMenu: false,
+                activeWindows: {},
+                volume: 75,
+                brightness: 80,
+                networkConnected: true,
+                themeIndex: 0,
+                purpleScreenActive: false,
+                eggTriggerCount: 0,
+                notificationCount: 0,
+                notifications: [],
+                launcherFinished: false,
+                installFinished: false,
+                // 安装向导
+                installSlide: 0,
+                installPaused: false,
+                installComplete: false,
+                installTimer: null,
+                installSlideStart: 0,
+                totalSlides: 20,
+                themeIndexTemp: 0,
+                // 日历事件
+                calendarEvents: {},
+                // 当前显示的弹出面板
+                activePopup: null,
+            };
+
+            // ==================== DOM 引用 ====================
+            const $ = id => document.getElementById(id);
+            const desktop = $('desktop');
+            const launcherScreen = $('launcherScreen');
+            const installScreen = $('installScreen');
+            const loginScreen = $('loginScreen');
+            const taskbar = $('taskbar');
+            const desktopArea = $('desktopArea');
+            const windowsContainer = $('windowsContainer');
+            const purpleScreen = $('purpleScreen');
+            const quoteText = $('quoteText');
+            const launcherProgress = $('launcherProgress');
+            const launcherStatus = $('launcherStatus');
+            const taskDate = $('taskDate');
+            const taskTime = $('taskTime');
+            const notifyBadge = $('notifyBadge');
+            const loginUser = $('loginUser');
+            const loginPass = $('loginPass');
+            const loginBtn = $('loginBtn');
+            const loginError = $('loginError');
+            const btnStart = $('btnStart');
+            const iconNetwork = $('iconNetwork');
+            const iconVolume = $('iconVolume');
+            const iconDisplay = $('iconDisplay');
+            const iconSettings = $('iconSettings');
+            const iconBattery = $('iconBattery');
+            const iconNotify = $('iconNotify');
+            // 安装向导元素
+            const installTitle = $('installTitle');
+            const installContent = $('installContent');
+            const installAd = $('installAd');
+            const installProgressFill = $('installProgressFill');
+            const installStatus = $('installStatus');
+            const installPercent = $('installPercent');
+            const installSlideNum = $('installSlideNum');
+            const installSkipBtn = $('installSkipBtn');
+
+            // ==================== 工具函数 ====================
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function updateClock() {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                const ss = String(now.getSeconds()).padStart(2, '0');
+                taskDate.textContent = `${y}-${m}-${d}`;
+                taskTime.textContent = `${hh}:${mm}:${ss}`;
+            }
+            setInterval(updateClock, 1000);
+            updateClock();
+
+            function addNotification(msg) {
+                state.notificationCount++;
+                state.notifications.push(msg);
+                notifyBadge.textContent = state.notificationCount > 9 ? '9+' : state.notificationCount;
+                notifyBadge.classList.remove('hidden');
+            }
+
+            function showPurpleScreen(code, msg) {
+                state.purpleScreenActive = true;
+                purpleScreen.classList.remove('hidden');
+                $('errorCodeDisplay').textContent = '0x' + code.toString(16).toUpperCase().padStart(8, '0');
+                $('errorMessageDisplay').textContent = msg || '未知错误';
+                Object.keys(state.activeWindows).forEach(id => closeWindow(id));
+            }
+            window.showPurpleScreen = showPurpleScreen;
+
+            // 关闭紫屏（模拟重启）
+            document.addEventListener('keydown', (e) => {
+                if (state.purpleScreenActive) {
+                    if (e.ctrlKey && e.altKey && (e.key === 'e' || e.key === 'E')) {
+                        state.purpleScreenActive = false;
+                        purpleScreen.classList.add('hidden');
+                        location.reload();
+                    }
+                    e.preventDefault();
+                    return;
+                }
+            });
+
+            // ==================== 启动动画 ====================
+            const quotes = [
+                "今天天气真好。", "欢迎回来，朋友。", "代码写累了就休息一下。",
+                "祝你写代码时心情愉快。", "阳光正好，水母飘过。", "f系统会一直陪着你。",
+                "你做的每一件事都很重要。", "写代码也是一种浪漫。", "水母说：你来了真好。",
+                "今天会有好消息。", "一起写代码吧。", "你值得被看见。",
+                "代码里有你的影子。", "慢慢来，比较快。", "你比你想象中更厉害。"
+            ];
+            const loadTexts = [
+                "正在数水母...", "编译阳光中...", "连接水母服务器...", "检查今天有没有Bug...",
+                "给水母喂食...", "查看谁在偷看代码...", "正在生成好心情...", "水母正在游泳...",
+                "正在播放启动音乐...", "整理代码中...", "给水母打气...", "正在加载阳光...",
+                "检查版本中...", "水母更新成功", "准备进入桌面..."
+            ];
+            let launcherProgressVal = 0;
+            let quoteIndex = 0;
+            let loadTextIdx = 0;
+
+            function startLauncher() {
+                launcherScreen.classList.remove('hidden');
+                launcherProgressVal = 0;
+                const interval = setInterval(() => {
+                    launcherProgressVal += 2.5;
+                    if (launcherProgressVal > 100) launcherProgressVal = 100;
+                    launcherProgress.style.width = launcherProgressVal + '%';
+                    if (Math.floor(launcherProgressVal) % 20 === 0) {
+                        quoteIndex = (quoteIndex + 1) % quotes.length;
+                        quoteText.textContent = quotes[quoteIndex];
+                    }
+                    if (Math.floor(launcherProgressVal) % 13 === 0) {
+                        loadTextIdx = (loadTextIdx + 1) % loadTexts.length;
+                        launcherStatus.textContent = loadTexts[loadTextIdx];
+                    }
+                    if (launcherProgressVal >= 100) {
+                        clearInterval(interval);
+                        launcherScreen.classList.add('hidden');
+                        state.launcherFinished = true;
+                        // 首次启动进入安装向导
+                        startInstallGuide();
+                    }
+                }, 120);
+            }
+
+            // ==================== 安装向导 ====================
+            const slides = [
+                { title: "欢迎来到水母工作室", content: "欢迎使用 Jellyfish Studio 阳间版系统。\n这里没有惊吓，没有隐藏机制，没有会在凌晨三点自动触发的彩蛋。\n这里只有一只温和的水母，和一个你可以放心打开的桌面。", status: "正在初始化水母引擎...", progress: 5 },
+                { title: "水母启动引擎", content: "每次开机，水母都会从屏幕中央浮现。\n带着柔和的光晕，缓缓出现在您面前。\n它不会突然跳出来吓您。\n它只是安静地漂浮在那里，告诉您：系统已就绪。", status: "正在加载水母动画模块...", progress: 10 },
+                { title: "字母弹动系统", content: "J E L L Y F I S H —— 九个字母，九个独立的灵魂。\n它们会按顺序弹出，每一个都精准落回原位。\n如果您看到某个字母提前跳出来，那不是错误。\n那是它在跟您打招呼。", status: "正在部署字母弹动引擎...", progress: 15 },
+                { title: "守慧吉祥物", content: "守慧是一只黄色的水母吉祥物。\n它长得不算好看，但它很努力。\n它不会说话，也不会动。但它一直在那里。\n您在界面上看到它，就知道您还在自己的系统里。", status: "正在安装守慧吉祥物...", progress: 20 },
+                { title: "守慧的出现位置", content: "守慧遍布系统的各个角落：\n· CD-KEY验证界面 · 登录界面 · OOBE设置向导\n· 系统信息窗口 · 文件管理器 · 计算器\n· Bug报告工具 · 系统设置 · 日历\n· 紫屏错误 · 开发历程彩蛋", status: "正在部署守慧位置数据库...", progress: 25 },
+                { title: "阳间规则", content: "? 没有隐藏的彩蛋\n? 没有凌晨三点触发机制\n? 没有悄悄修改您的代码\n? 没有暗中记录您的操作习惯\n? 没有\"你确定吗\"的弹窗\n您看到的规则，就是全部的规则。", status: "正在加载阳间规则集...", progress: 30 },
+                { title: "没有隐藏的惊吓", content: "这里没有鬼故事。没有突然变色的紫屏。\n没有藏在代码里的神秘变量。\n没有只有特定时间才会出现的字符。\n没有倒计时。\n如果您在晚上十点打开它，它不会问您为什么还没睡。", status: "正在确认无隐藏机制...", progress: 35 },
+                { title: "夜深了，注意休息", content: "如果您在凌晨三点打开它，它也不会惊讶。\n它只会显示：\"夜深了，注意休息。\"\n然后安静地启动，等您开始工作。\n它不会记录您熬夜的次数。\n它只是温和地提醒一次，然后继续做它该做的事。", status: "正在加载夜间问候模块...", progress: 40 },
+                { title: "您可以修改任何东西", content: "您添加的功能会正常显示。\n您删除的代码不会自己回来。\n您改的启动文本会按您写的样子出现。\n您移动的按钮会停留在您放置的位置。\n不会有一个隐藏进程在后台悄悄把您的改动还原。", status: "正在部署用户修改权限...", progress: 45 },
+                { title: "错误会被正常显示", content: "如果系统遇到问题，它会平静地告诉您。\n用清晰的文字，而不是蓝屏或紫屏。\n不会闪烁红色。不会突然关机。\n不会丢出一串十六进制代码让您自己猜。\n它只会停下来，等您确认，然后继续。", status: "正在安装错误处理系统...", progress: 50 },
+                { title: "音乐随您心情", content: "您可以放启动音乐，也可以不放。\n没有音乐文件？安静启动，不报错。\n不会弹出\"缺少文件\"的窗口。\n不会闪烁红灯。\n它只会在日志里默默记录一行：\n\"启动音乐未加载，系统正常运行。\"", status: "正在配置音乐加载器...", progress: 55 },
+                { title: "稳定可靠", content: "您今天看到的内容，明天还会在。\n不会自己更新规则。不会在深夜添加彩蛋。\n不会修改自己的注释。\n您留下的每行代码，都会保持您离开时的样子。\n它是可预期的、稳定的、不会自己变动的。", status: "正在锁定系统稳定性...", progress: 60 },
+                { title: "您可以随时离开", content: "您可以随时打开它。也可以随时关上它。\n关闭系统 —— 它不会感到遗憾。\n切换到阴间版 —— 它不会阻止您。\n删掉整个仓库 —— 它不会自己恢复。\n它只是稳定地运行着，等您下一次回来。", status: "正在配置退出机制...", progress: 65 },
+                { title: "水母的哲学", content: "\"代码写累了，休息一下。\"\n\"你做的每一件事都很重要。\"\n\"写代码，也是一种浪漫。\"\n\"你比你想象中更厉害。\"\n\"代码里有你的影子。\"\n\"坚持是最酷的事。\"\n\"保持热爱，奔赴山海。\"", status: "正在加载水母语录库...", progress: 70 },
+                { title: "我们的承诺", content: "不会记住您的输入习惯。\n不会记录您用了多少次命令。\n不会在开机的时候提醒您\"您上周输错了七次命令\"。\n它只是温和地漂浮在那里，陪您开始新的一天。", status: "正在确认隐私承诺...", progress: 75 },
+                { title: "您现在知道全部规则了", content: "没有隐藏条款。\n没有只能在特定条件下触发的行为。\n没有只有开发者才知道的秘密入口。\n阳间版没有秘密。\n它的全部行为，都写在代码里。", status: "正在确认规则完整性...", progress: 80 },
+                { title: "准备就绪", content: "水母引擎已加载。守慧已就位。\n字母弹动系统已部署。阳间规则已确认。\n错误处理系统已安装。音乐系统已配置。\n一切都已准备就绪。", status: "正在进行最终检查...", progress: 85 },
+                { title: "请记住", content: "你是开发者。\n你是创作者。\n你是这个系统的主人。\n你写下的每一行代码，都比你想象的更有力量。\n送给你的一句话：Change is constant.--出自GitHub。", status: "正在写入最终确认...", progress: 88 },
+                { title: "最后的叮嘱", content: "如果有一天你不想用了，可以删除它。\n如果有一天你想重新开始，可以重新安装它。\n它不会阻止你，不会挽留你，不会记录你离开的时间。\n它只是你创造的一个工具，一个伙伴，一个水母。", status: "正在完成安装...", progress: 92 },
+                { title: "安装完成", content: "?? 水母工作室 · 阳间版 已准备就绪。\n\n您现在可以随时打开它。\n也可以随时关上它。\n它不会在意。\n它只是稳定地运行着，等您下一次回来。", status: "安装完成", progress: 100 }
+            ];
+
+            const adList = [
+                "水母工作室 · 一个你可以放心打开的地方。",
+                "没有隐藏彩蛋，只有一只温和的水母。",
+                "守慧很丑，但它无处不在。它是水母工作室的签名。",
+                "你看到的规则，就是全部的规则。",
+                "不会自己更新规则，不会在深夜添加彩蛋。",
+                "你可以随时打开它，也可以随时关上它。它不会在意。",
+                "代码保持你离开时的样子。",
+                "水母说：你来了真好。",
+                "写代码，也是一种浪漫。",
+                "你做的每一件事都很重要。",
+                "慢慢来，比较快。",
+                "保持热爱，奔赴山海。",
+                "代码是写给未来的情书。",
+                "每一个 bug 都是成长的机会。",
+                "坚持是最酷的事。",
+                "阳光正好，水母飘过。",
+                "你比你想象中更厉害。",
+                "代码里有你的影子。",
+                "今天也是好天气。",
+                "欢迎回来，朋友。",
+                "愿你写代码时心情愉快。",
+                "一起写代码吧。",
+                "你值得被看见。",
+                "用心写好每一行。",
+                "今天又是美好的一天。",
+                "你来了，故事就开始了。",
+                "代码会说话。",
+                "梦想在代码中绽放。",
+                "f系统会一直陪着你。",
+                "水母给你力量。"
+            ];
+
+            function startInstallGuide() {
+                installScreen.classList.remove('hidden');
+                state.installSlide = 0;
+                state.installPaused = false;
+                state.installComplete = false;
+                state.installSlideStart = Date.now();
+                renderInstallSlide();
+                // 每5秒自动翻页
+                if (state.installTimer) clearInterval(state.installTimer);
+                state.installTimer = setInterval(() => {
+                    if (state.installPaused || state.installComplete) return;
+                    if (Date.now() - state.installSlideStart >= 5000) {
+                        nextInstallSlide();
+                    }
+                }, 200);
+            }
+
+            function renderInstallSlide() {
+                const slide = slides[state.installSlide];
+                installTitle.textContent = slide.title;
+                installContent.textContent = slide.content;
+                installAd.textContent = adList[state.installSlide % adList.length];
+                installProgressFill.style.width = slide.progress + '%';
+                installStatus.textContent = slide.status;
+                installPercent.textContent = slide.progress + '%';
+                installSlideNum.textContent = (state.installSlide + 1) + ' / ' + state.totalSlides;
+                state.installSlideStart = Date.now();
+            }
+
+            function nextInstallSlide() {
+                if (state.installSlide >= state.totalSlides - 1) {
+                    finishInstall();
+                    return;
+                }
+                state.installSlide++;
+                renderInstallSlide();
+            }
+
+            function finishInstall() {
+                state.installComplete = true;
+                if (state.installTimer) clearInterval(state.installTimer);
+                installScreen.classList.add('hidden');
+                // 安装完成 → 登录
+                showLogin();
+            }
+
+            // 安装向导交互
+            installSkipBtn.addEventListener('click', () => {
+                finishInstall();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (!installScreen.classList.contains('hidden') && !state.installComplete) {
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        state.installPaused = !state.installPaused;
+                        installStatus.textContent = state.installPaused ? '已暂停 (按空格继续)' : slides[state.installSlide].status;
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        nextInstallSlide();
+                    } else if (e.key === 'Escape') {
+                        finishInstall();
+                    }
+                }
+            });
+
+            // ==================== 登录 ====================
+            function showLogin() {
+                loginScreen.classList.remove('hidden');
+                taskbar.classList.add('hidden');
+                desktopArea.classList.add('hidden');
+                loginError.textContent = '';
+            }
+
+            loginBtn.addEventListener('click', () => {
+                const user = loginUser.value.trim();
+                const pass = loginPass.value.trim();
+                if (user === state.currentUser && pass === state.password) {
+                    loginScreen.classList.add('hidden');
+                    taskbar.classList.remove('hidden');
+                    desktopArea.classList.remove('hidden');
+                    state.isLoggedIn = true;
+                    desktopArea.style.background = themes[state.themeIndex].desktop;
+                    addNotification('欢迎回来，' + state.currentUser);
+                } else {
+                    loginError.textContent = '用户名或密码错误，请重试';
+                }
+            });
+            loginPass.addEventListener('keydown', e => { if (e.key === 'Enter') loginBtn.click(); });
+
+            // ==================== 任务栏 & 弹出面板 ====================
+            function closeAllPopups() {
+                document.querySelectorAll('.popup-panel').forEach(p => p.remove());
+                state.activePopup = null;
+            }
+
+            // 开始菜单
+            btnStart.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activePopup === 'start') {
+                    closeAllPopups();
+                    return;
+                }
+                closeAllPopups();
+                const menu = document.createElement('div');
+                menu.className = 'popup-panel';
+                menu.style.left = '4px';
+                menu.style.top = '64px';
+                menu.style.width = '200px';
+                menu.innerHTML = `
+                    <div class="popup-title">开始菜单</div>
+                    <div class="popup-item" data-cmd="calculator">📱 计算器</div>
+                    <div class="popup-item" data-cmd="fileManager">📁 文件管理器</div>
+                    <div class="popup-item" data-cmd="systemInfo">💻 系统信息</div>
+                    <div class="popup-item" data-cmd="settings">⚙️ 系统设置</div>
+                    <div class="popup-item" data-cmd="bugReporter">🐛 Bug报告</div>
+                    <div class="popup-item" data-cmd="calendar">📅 日历</div>
+                    <div class="popup-item" data-cmd="clock">🕒 时钟</div>
+                    <div class="popup-item" data-cmd="ai">🧠 AI助手</div>
+                    <div style="border-top:1px solid #4a4a6a;margin:4px 0;"></div>
+                    <div class="popup-item" data-cmd="shutdown">🔒 关机</div>
+                `;
+                desktop.appendChild(menu);
+                state.activePopup = 'start';
+
+                menu.querySelectorAll('.popup-item').forEach(item => {
+                    item.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        handleStartCommand(item.dataset.cmd);
+                        closeAllPopups();
+                    });
+                });
+            });
+
+            // 网络图标
+            iconNetwork.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activePopup === 'network') { closeAllPopups(); return; }
+                closeAllPopups();
+                const p = document.createElement('div');
+                p.className = 'popup-panel';
+                p.style.left = '90px';
+                p.style.top = '64px';
+                p.style.minWidth = '220px';
+                p.innerHTML = `
+                    <div class="popup-title">网络设置</div>
+                    <div style="font-size:13px;margin-bottom:8px;">
+                        状态: <span style="color:${state.networkConnected ? '#6f6' : '#f66'}">${state.networkConnected ? '已连接 (模拟)' : '未连接'}</span>
+                    </div>
+                    <div class="popup-item" id="netToggle">${state.networkConnected ? '断开网络' : '连接网络'}</div>
+                    <div class="popup-item" id="netRefresh">刷新网络列表</div>
+                    <div style="font-size:11px;color:#8aa;margin-top:8px;">WiFi: Jellyfish_5G (信号强)</div>
+                `;
+                desktop.appendChild(p);
+                state.activePopup = 'network';
+                p.querySelector('#netToggle').addEventListener('click', () => {
+                    state.networkConnected = !state.networkConnected;
+                    addNotification(state.networkConnected ? '网络已连接 (模拟)' : '网络已断开');
+                    closeAllPopups();
+                });
+                p.querySelector('#netRefresh').addEventListener('click', () => {
+                    addNotification('正在扫描网络... (模拟)');
+                    closeAllPopups();
+                });
+            });
+
+            // 音量图标
+            iconVolume.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activePopup === 'volume') { closeAllPopups(); return; }
+                closeAllPopups();
+                const p = document.createElement('div');
+                p.className = 'popup-panel';
+                p.style.left = '130px';
+                p.style.top = '64px';
+                p.style.minWidth = '240px';
+                p.innerHTML = `
+                    <div class="popup-title">音量</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span>🔈</span>
+                        <input type="range" id="volRange" min="0" max="100" value="${state.volume}" style="flex:1;">
+                        <span id="volLabel" style="font-size:13px;">${state.volume}%</span>
+                    </div>
+                    <div class="popup-item" id="volMute" style="margin-top:6px;">静音切换</div>
+                `;
+                desktop.appendChild(p);
+                state.activePopup = 'volume';
+                const range = p.querySelector('#volRange');
+                const label = p.querySelector('#volLabel');
+                range.addEventListener('input', () => {
+                    state.volume = parseInt(range.value);
+                    label.textContent = state.volume + '%';
+                });
+                p.querySelector('#volMute').addEventListener('click', () => {
+                    state.volume = state.volume > 0 ? 0 : 75;
+                    range.value = state.volume;
+                    label.textContent = state.volume + '%';
+                    addNotification(state.volume === 0 ? '已静音' : '取消静音');
+                });
+            });
+
+            // 显示(亮度)图标
+            iconDisplay.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activePopup === 'display') { closeAllPopups(); return; }
+                closeAllPopups();
+                const p = document.createElement('div');
+                p.className = 'popup-panel';
+                p.style.left = '170px';
+                p.style.top = '64px';
+                p.style.minWidth = '240px';
+                p.innerHTML = `
+                    <div class="popup-title">显示设置</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span>🔆</span>
+                        <input type="range" id="brightRange" min="0" max="100" value="${state.brightness}" style="flex:1;">
+                        <span id="brightLabel" style="font-size:13px;">${state.brightness}%</span>
+                    </div>
+                    <div style="font-size:11px;color:#8aa;margin-top:8px;">屏幕亮度 (模拟)</div>
+                `;
+                desktop.appendChild(p);
+                state.activePopup = 'display';
+                const range = p.querySelector('#brightRange');
+                const label = p.querySelector('#brightLabel');
+                range.addEventListener('input', () => {
+                    state.brightness = parseInt(range.value);
+                    label.textContent = state.brightness + '%';
+                });
+            });
+
+            // 设置图标
+            iconSettings.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeAllPopups();
+                openSettings();
+            });
+
+            // 电池图标
+            iconBattery.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activePopup === 'battery') { closeAllPopups(); return; }
+                closeAllPopups();
+                const p = document.createElement('div');
+                p.className = 'popup-panel';
+                p.style.left = '250px';
+                p.style.top = '64px';
+                p.innerHTML = `
+                    <div class="popup-title">电池信息</div>
+                    <div style="font-size:13px;">🔋 剩余: 82% (模拟)</div>
+                    <div style="font-size:13px;">状态: 使用中</div>
+                    <div style="font-size:11px;color:#8aa;margin-top:6px;">剩余时间: 约4小时30分</div>
+                `;
+                desktop.appendChild(p);
+                state.activePopup = 'battery';
+            });
+
+            // 通知图标
+            iconNotify.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.activePopup === 'notify') { closeAllPopups(); return; }
+                closeAllPopups();
+                const p = document.createElement('div');
+                p.className = 'popup-panel';
+                p.style.left = '290px';
+                p.style.top = '64px';
+                p.style.minWidth = '260px';
+                p.innerHTML = `
+                    <div class="popup-title">通知 (${state.notificationCount})</div>
+                    <div style="max-height:180px;overflow-y:auto;font-size:13px;">
+                        ${state.notifications.length === 0 ? '<div style="color:#8aa;padding:8px;">没有新通知</div>' : 
+                          state.notifications.slice(-5).map(n => `<div style="padding:4px 0;border-bottom:1px solid #3a3a5a;">${escapeHtml(n)}</div>`).join('')}
+                    </div>
+                    <div class="popup-item" id="notifyClear" style="margin-top:8px;">清除全部通知</div>
+                `;
+                desktop.appendChild(p);
+                state.activePopup = 'notify';
+                p.querySelector('#notifyClear').addEventListener('click', () => {
+                    state.notificationCount = 0;
+                    state.notifications = [];
+                    notifyBadge.classList.add('hidden');
+                    closeAllPopups();
+                });
+            });
+
+            // 点击空白处关闭弹出面板
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.popup-panel') && !e.target.closest('.status-icons') && !e.target.closest('#btnStart')) {
+                    closeAllPopups();
+                }
+            });
+
+            // 开始菜单命令
+            function handleStartCommand(cmd) {
+                switch (cmd) {
+                    case 'calculator': openCalculator(); break;
+                    case 'fileManager': openFileManager(); break;
+                    case 'systemInfo': openSystemInfo(); break;
+                    case 'settings': openSettings(); break;
+                    case 'bugReporter': openBugReporter(); break;
+                    case 'calendar': openCalendar(); break;
+                    case 'clock': openClock(); break;
+                    case 'ai': openAI(); break;
+                    case 'shutdown': shutdownSimulation(); break;
+                }
+            }
+
+            // ==================== 窗口管理 ====================
+            let windowIdCounter = 0;
+            function createWindow(title, contentHtml, width, height, onClose) {
+                const winId = 'win-' + (++windowIdCounter);
+                const win = document.createElement('div');
+                win.className = 'app-window';
+                win.id = winId;
+                win.style.width = width + 'px';
+                win.style.height = height + 'px';
+                win.style.top = '50%';
+                win.style.left = '50%';
+                win.style.transform = 'translate(-50%, -50%)';
+                win.innerHTML = `
+                    <div class="app-title">
+                        <span>${escapeHtml(title)}</span>
+                        <button class="close-btn" data-win="${winId}">✕</button>
+                    </div>
+                    <div class="app-content">${contentHtml}</div>
+                `;
+                windowsContainer.appendChild(win);
+                state.activeWindows[winId] = win;
+
+                win.querySelector('.close-btn').addEventListener('click', () => {
+                    closeWindow(winId);
+                    if (onClose) onClose();
+                });
+
+                // 拖动
+                const titleBar = win.querySelector('.app-title');
+                let isDragging = false, offsetX, offsetY;
+                titleBar.addEventListener('mousedown', (e) => {
+                    if (e.target.tagName === 'BUTTON') return;
+                    isDragging = true;
+                    const rect = win.getBoundingClientRect();
+                    offsetX = e.clientX - rect.left;
+                    offsetY = e.clientY - rect.top;
+                    win.style.transform = 'none';
+                    win.style.left = rect.left + 'px';
+                    win.style.top = rect.top + 'px';
+                    win.style.position = 'absolute';
+                });
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    win.style.left = (e.clientX - offsetX) + 'px';
+                    win.style.top = (e.clientY - offsetY) + 'px';
+                });
+                document.addEventListener('mouseup', () => { isDragging = false; });
+
+                return winId;
+            }
+
+            function closeWindow(winId) {
+                const win = state.activeWindows[winId];
+                if (win) {
+                    win.remove();
+                    delete state.activeWindows[winId];
+                }
+            }
+
+            // ==================== 主题色 ====================
+            const themes = [
+                { desktop: '#ffc8dc', taskbar: '#3c3c3c', accent: '#1e3c78' },
+                { desktop: '#c8dcff', taskbar: '#324664', accent: '#1e64c8' },
+                { desktop: '#dcffdc', taskbar: '#3c6446', accent: '#28a050' },
+                { desktop: '#f0dcff', taskbar: '#503c64', accent: '#7850b4' },
+            ];
+
+            // ==================== 应用：计算器 ====================
+            function openCalculator() {
+                if (state.activeWindows['calc']) return;
+                const html = `
+                    <div class="calc-display" id="calcDisplay">0</div>
+                    <div class="calc-grid" id="calcGrid">
+                        <div class="calc-btn" data-val="7">7</div><div class="calc-btn" data-val="8">8</div><div class="calc-btn" data-val="9">9</div><div class="calc-btn op" data-val="+">+</div>
+                        <div class="calc-btn" data-val="4">4</div><div class="calc-btn" data-val="5">5</div><div class="calc-btn" data-val="6">6</div><div class="calc-btn op" data-val="-">-</div>
+                        <div class="calc-btn" data-val="1">1</div><div class="calc-btn" data-val="2">2</div><div class="calc-btn" data-val="3">3</div><div class="calc-btn op" data-val="*">*</div>
+                        <div class="calc-btn" data-val="0">0</div><div class="calc-btn" data-val=".">.</div><div class="calc-btn op" data-val="=">=</div><div class="calc-btn op" data-val="/">/</div>
+                        <div class="calc-btn" data-val="C" style="grid-column: span 4; background:#e88;">C</div>
+                    </div>
+                `;
+                const winId = createWindow('计算器', html, 360, 480);
+                state.activeWindows['calc'] = document.getElementById(winId);
+
+                let display = '0', currentValue = 0, operator = null, waitingOperand = false;
+                const displayEl = document.querySelector(`#${winId} #calcDisplay`);
+
+                document.querySelector(`#${winId} #calcGrid`).addEventListener('click', (e) => {
+                    const btn = e.target.closest('.calc-btn');
+                    if (!btn) return;
+                    const val = btn.dataset.val;
+                    if (!val) return;
+
+                    if (val === 'C') {
+                        display = '0'; currentValue = 0; operator = null; waitingOperand = false;
+                    } else if (val === '=') {
+                        if (operator && !waitingOperand) {
+                            const operand = parseFloat(display);
+                            switch (operator) {
+                                case '+': currentValue += operand; break;
+                                case '-': currentValue -= operand; break;
+                                case '*': currentValue *= operand; break;
+                                case '/': currentValue = operand !== 0 ? currentValue / operand : NaN; break;
+                            }
+                            display = isNaN(currentValue) ? '错误' : String(currentValue);
+                            operator = null; waitingOperand = true;
+                        }
+                    } else if (['+','-','*','/'].includes(val)) {
+                        if (!waitingOperand) {
+                            currentValue = parseFloat(display);
+                            operator = val;
+                            waitingOperand = true;
+                        }
+                    } else if (val === '.') {
+                        if (!display.includes('.')) display += '.';
+                    } else {
+                        if (waitingOperand || display === '0') { display = val; waitingOperand = false; }
+                        else display += val;
+                    }
+                    displayEl.textContent = display;
+
+                    if (display === '582') addNotification('🔔 你发现了隐藏彩蛋！');
+                });
+            }
+
+            // ==================== 应用：文件管理器 ====================
+            function openFileManager() {
+                if (state.activeWindows['fm']) return;
+                const html = `
+                    <div class="file-command">
+                        <input type="text" id="fmInput" placeholder="输入命令... (help查看)" value="">
+                        <button id="fmRun" style="padding:6px 12px;">执行</button>
+                    </div>
+                    <div class="file-output" id="fmOutput">fOS 文件管理器 v1.0 专业版\n输入 'help' 查看可用命令\n</div>
+                `;
+                const winId = createWindow('文件管理器', html, 600, 480);
+                state.activeWindows['fm'] = document.getElementById(winId);
+                const input = document.querySelector(`#${winId} #fmInput`);
+                const output = document.querySelector(`#${winId} #fmOutput`);
+                const runBtn = document.querySelector(`#${winId} #fmRun`);
+
+                function appendOutput(text) {
+                    output.textContent += '\n' + text;
+                    output.scrollTop = output.scrollHeight;
+                }
+
+                const commands = {
+                    help: () => `可用命令:
+  list - 列出文件(模拟)
+  to <路径> - 切换目录(模拟)
+  read <文件> - 打开文件(模拟)
+  open <文件> - 用外部程序打开(模拟)
+  newf <文件> - 创建文件(模拟)
+  rem <文件> - 删除文件(模拟)
+  clear - 清屏
+  testbyte - 触发字节错误检测(紫屏)
+  testmem - 显示内存状态
+  fos - 输入5次触发彩蛋
+  now - 显示时间
+  about - 关于`,
+                    list: () => '模拟文件列表:\n[DIR] 文档\n[DIR] 图片\n[FILE] readme.txt\n[FILE] system.dat\n[FILE] test_byte_error.txt',
+                    to: (arg) => `模拟切换目录到: ${arg || 'C:\\'} (仅演示)`,
+                    read: (arg) => {
+                        if (arg === 'test_byte_error.txt') {
+                            setTimeout(() => {
+                                showPurpleScreen(0xF000000B, '文件读取字节错误\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n文件: test_byte_error.txt\n检测到无效UTF-8序列\n可能原因: 二进制文件被当作文本读取\n建议使用 open 命令');
+                            }, 100);
+                            return '正在读取 test_byte_error.txt ... (触发紫屏)';
+                        }
+                        return `模拟读取文件: ${arg || '未指定'}`;
+                    },
+                    open: (arg) => `模拟用外部程序打开: ${arg || '未指定'}`,
+                    newf: (arg) => `模拟创建文件: ${arg || '未指定'} (不会真实创建)`,
+                    rem: (arg) => `模拟删除文件: ${arg || '未指定'} (不会真实删除)`,
+                    clear: () => { output.textContent = ''; return ''; },
+                    testbyte: () => {
+                        setTimeout(() => {
+                            showPurpleScreen(0xF000000B, '文件读取字节错误\n检测到无效UTF-8序列 (模拟)\n文件: test_byte_error.txt');
+                        }, 200);
+                        return '正在触发字节错误检测...';
+                    },
+                    testmem: () => '内存状态: 分配 128 次, 释放 125 次, 泄漏 3 处 (模拟)',
+                    now: () => `当前时间: ${new Date().toLocaleString()}`,
+                    about: () => 'fOS 文件管理器 v1.0 专业版\n版本 0.0.01b · 阳间版演示',
+                };
+
+                function runCommand() {
+                    const cmdLine = input.value.trim();
+                    if (!cmdLine) return;
+                    appendOutput('> ' + cmdLine);
+                    input.value = '';
+
+                    const parts = cmdLine.split(' ');
+                    const cmd = parts[0].toLowerCase();
+                    const arg = parts.slice(1).join(' ');
+
+                    if (cmdLine.includes('fos')) {
+                        state.eggTriggerCount++;
+                        if (state.eggTriggerCount >= 5) {
+                            state.eggTriggerCount = 0;
+                            appendOutput('✨ 彩蛋触发！水母求饶画面 (模拟)');
+                            addNotification('🐙 水母求饶：不要杀了我！我可是开发团队水母！');
+                        }
+                    }
+
+                    if (commands[cmd]) {
+                        const result = commands[cmd](arg);
+                        if (result) appendOutput(result);
+                    } else {
+                        appendOutput(`未知命令: ${cmd}，输入 help 查看帮助`);
+                    }
+                }
+
+                runBtn.addEventListener('click', runCommand);
+                input.addEventListener('keydown', e => { if (e.key === 'Enter') runCommand(); });
+            }
+
+            // ==================== 应用：系统信息 ====================
+            function openSystemInfo() {
+                if (state.activeWindows['sysinfo']) return;
+                const html = `
+                    <div style="font-size:14px; line-height:1.8;">
+                        <p><strong>操作系统:</strong> fOS 0.0.01b Professional (Build 01b) - 演示版</p>
+                        <p><strong>处理器:</strong> f系统0.0专用处理器 (模拟)</p>
+                        <p><strong>内存信息:</strong> 版权归Jellyfish Studio所有（2020-2030），严禁二次分发！</p>
+                        <p><strong>系统架构:</strong> 64位 (浏览器环境)</p>
+                        <p><strong>版本信息:</strong> Build 01b (fOS.0.0.Professional)</p>
+                        <p><strong>注册用户:</strong> ${escapeHtml(state.currentUser)}</p>
+                        <p><strong>计算机名:</strong> FOS-PC</p>
+                        <p><strong>激活状态:</strong> 已激活 · 完整功能</p>
+                        <hr>
+                        <p style="font-size:12px; color:#666;">(c) 2025 Jellyfish Studio · 版本 0.0.01b.2026</p>
+                    </div>
+                `;
+                createWindow('系统信息', html, 450, 380);
+                state.activeWindows['sysinfo'] = true;
+                const win = document.querySelector('.app-window:last-child');
+                if (win) win.querySelector('.close-btn').addEventListener('click', () => { delete state.activeWindows['sysinfo']; });
+            }
+
+            // ==================== 应用：设置 ====================
+            function openSettings() {
+                if (state.activeWindows['settings']) return;
+                const html = `
+                    <div>
+                        <div style="margin-bottom:12px;"><strong>用户名:</strong> ${escapeHtml(state.currentUser)}</div>
+                        <div style="margin-bottom:12px;"><strong>系统主题:</strong>
+                            <select id="themeSelect" style="padding:6px;">
+                                <option value="0">默认粉</option>
+                                <option value="1">专业蓝</option>
+                                <option value="2">清新绿</option>
+                                <option value="3">优雅紫</option>
+                            </select>
+                        </div>
+                        <button id="applyTheme" style="padding:8px 16px; background:#1e3c78; color:white; border:none; border-radius:4px; cursor:pointer;">应用主题</button>
+                        <div style="margin-top:20px;font-size:12px;color:#888;">部分设置需要重启生效 (演示)</div>
+                    </div>
+                `;
+                const winId = createWindow('系统设置', html, 400, 300);
+                state.activeWindows['settings'] = document.getElementById(winId);
+                const win = document.getElementById(winId);
+                const select = win.querySelector('#themeSelect');
+                select.value = state.themeIndex;
+                win.querySelector('#applyTheme').addEventListener('click', () => {
+                    state.themeIndex = parseInt(select.value);
+                    desktopArea.style.background = themes[state.themeIndex].desktop;
+                    addNotification('主题已切换为: ' + ['默认粉','专业蓝','清新绿','优雅紫'][state.themeIndex]);
+                });
+                win.querySelector('.close-btn').addEventListener('click', () => { delete state.activeWindows['settings']; });
+            }
+
+            // ==================== 应用：Bug报告 ====================
+            function openBugReporter() {
+                if (state.activeWindows['bug']) return;
+                const html = `
+                    <div>Bug标题: <input type="text" id="bugTitle" style="width:100%;padding:6px;margin:4px 0;"></div>
+                    <div>详细描述: <textarea id="bugDesc" rows="4" style="width:100%;padding:6px;margin:4px 0;"></textarea></div>
+                    <div style="margin:8px 0;">
+                        <label>严重程度: <select id="bugSeverity"><option>低</option><option>中</option><option>高</option><option>严重</option></select></label>
+                    </div>
+                    <button id="bugSubmit" style="padding:8px 20px; background:#3cba54; color:white; border:none; border-radius:4px; cursor:pointer;">提交报告</button>
+                    <div id="bugResult" style="margin-top:8px;color:#3cba54;"></div>
+                `;
+                const winId = createWindow('Bug报告工具', html, 450, 380);
+                state.activeWindows['bug'] = document.getElementById(winId);
+                const win = document.getElementById(winId);
+                win.querySelector('#bugSubmit').addEventListener('click', () => {
+                    const title = win.querySelector('#bugTitle').value.trim();
+                    if (!title) { win.querySelector('#bugResult').textContent = '请输入标题'; return; }
+                    win.querySelector('#bugResult').textContent = '✅ 报告已提交 (模拟，不会真实保存)';
+                    addNotification('Bug报告已提交: ' + title);
+                });
+                win.querySelector('.close-btn').addEventListener('click', () => { delete state.activeWindows['bug']; });
+            }
+
+            // ==================== 应用：日历 ====================
+            function openCalendar() {
+                if (state.activeWindows['cal']) return;
+                const now = new Date();
+                const year = now.getFullYear(), month = now.getMonth() + 1;
+                const firstDay = new Date(year, month - 1, 1).getDay();
+                const daysInMonth = new Date(year, month, 0).getDate();
+                let cells = '';
+                for (let i = 0; i < firstDay; i++) cells += '<div></div>';
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const isToday = (d === now.getDate());
+                    cells += `<div style="${isToday ? 'background:#ffcc00;border-radius:50%;' : ''}padding:6px;border:1px solid #ddd;cursor:pointer;" class="cal-day" data-day="${d}">${d}</div>`;
+                }
+                const html = `
+                    <div style="text-align:center;font-size:20px;font-weight:bold;margin-bottom:8px;">${year}年 ${month}月</div>
+                    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;">
+                        <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        ${cells}
+                    </div>
+                    <div style="margin-top:8px;font-size:12px;color:#888;">点击日期设置事件 (模拟)</div>
+                    <div id="calEventDisplay" style="margin-top:8px;font-size:13px;color:#333;"></div>
+                `;
+                const winId = createWindow('日历', html, 420, 440);
+                state.activeWindows['cal'] = document.getElementById(winId);
+                const win = document.getElementById(winId);
+                win.querySelectorAll('.cal-day').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const day = el.dataset.day;
+                        const key = `${year}-${month}-${day}`;
+                        const ev = prompt('输入事件内容 (模拟):', state.calendarEvents[key] || '');
+                        if (ev !== null) {
+                            state.calendarEvents[key] = ev;
+                            win.querySelector('#calEventDisplay').textContent = `${year}年${month}月${day}日: ${ev || '(无事件)'}`;
+                        }
+                    });
+                });
+                win.querySelector('.close-btn').addEventListener('click', () => { delete state.activeWindows['cal']; });
+            }
+
+            // ==================== 应用：时钟 ====================
+            function openClock() {
+                if (state.activeWindows['clock']) return;
+                const html = `<div id="clockDisplay" style="font-size:42px;text-align:center;font-family:monospace;">00:00:00</div>`;
+                const winId = createWindow('时钟', html, 300, 200);
+                state.activeWindows['clock'] = document.getElementById(winId);
+                const win = document.getElementById(winId);
+                const display = win.querySelector('#clockDisplay');
+                const interval = setInterval(() => {
+                    display.textContent = new Date().toLocaleTimeString();
+                }, 500);
+                win.querySelector('.close-btn').addEventListener('click', () => {
+                    clearInterval(interval);
+                    delete state.activeWindows['clock'];
+                });
+            }
+
+            // ==================== 应用：AI助手 ====================
+            function openAI() {
+                if (state.activeWindows['ai']) return;
+                const html = `
+                    <div style="margin-bottom:8px;font-size:14px;color:#666;">守慧AI助手 (演示版，无实际AI功能)</div>
+                    <div id="aiOutput" style="background:#f4f4f4;border:1px solid #ccc;padding:8px;height:120px;overflow:auto;font-family:monospace;font-size:13px;">欢迎使用守慧AI助手！\n输入数字(逗号分隔)测试预测\n输入 'train' 进入训练模式</div>
+                    <div style="display:flex;margin-top:8px;gap:4px;">
+                        <input type="text" id="aiInput" style="flex:1;padding:6px;" placeholder="输入命令或数字...">
+                        <button id="aiSend" style="padding:6px 12px;">发送</button>
+                    </div>
+                `;
+                const winId = createWindow('AI助手 - 守慧', html, 450, 350);
+                state.activeWindows['ai'] = document.getElementById(winId);
+                const win = document.getElementById(winId);
+                const output = win.querySelector('#aiOutput');
+                const input = win.querySelector('#aiInput');
+                win.querySelector('#aiSend').addEventListener('click', () => {
+                    const val = input.value.trim();
+                    if (!val) return;
+                    output.textContent += '\n> ' + val;
+                    if (val === 'train') output.textContent += '\n训练模式已开启，输入数据格式: 0.5,0.3|0.8,0.2';
+                    else if (val === 'done') output.textContent += '\n训练完成 (模拟)';
+                    else if (/^[\d.,\s]+$/.test(val)) output.textContent += '\n预测结果: 0.82, 0.15 (模拟)';
+                    else output.textContent += '\n未知命令';
+                    input.value = '';
+                    output.scrollTop = output.scrollHeight;
+                });
+                win.querySelector('.close-btn').addEventListener('click', () => { delete state.activeWindows['ai']; });
+            }
+
+            // ==================== 关机模拟 ====================
+            function shutdownSimulation() {
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;background:black;color:white;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:9999;';
+                overlay.innerHTML = '<h1>f系统</h1><p>正在关机...</p>';
+                document.body.appendChild(overlay);
+                setTimeout(() => {
+                    overlay.innerHTML = '<h1>f系统</h1><p>已经安全关机</p><p style="font-size:12px;color:#888;">感谢使用 (刷新页面可重新启动)</p>';
+                }, 1500);
+            }
+
+            // ==================== 启动 ====================
+            startLauncher();
+        })();
+    </script>
+</body>
+</html>

@@ -47,6 +47,7 @@
 //05/08/26 19:04:时钟回归(任务栏版本bete2),碰撞箱未修复
 //05/08/26 20:11:网络调节真实实现
 //15/08/26 10:46:实现了加密储存配置文件
+//18/10/26 13:50:将版本号改成0.0.01b
 
 #include <windows.h>
 #include <string.h>
@@ -130,10 +131,10 @@ extern "C" {
 //#define _WIN32_WINNT 0x0600   // Windows Vista 及以上
 
 // 版本信息
-#define MAJOR_VERSION 1
+#define MAJOR_VERSION 0
 #define MINOR_VERSION 0
-#define BUILD_VERSION 400
-#define RELEASE_YEAR 2025
+#define BUILD_VERSION 01
+#define RELEASE_YEAR 2026
 
 // 配置文件路径
 #define CONFIG_FILE "f系统配置.dat"
@@ -283,7 +284,7 @@ static BOOL g_useSunlightLauncher = TRUE;
 #define DEBUG_LOG_FILE "fos_debug.log"
 
 // DEBUG版本信息
-#define DEBUG_VERSION "1.0.400-DEBUG"
+#define DEBUG_VERSION "0.0.01b-DEBUG"
 #define DEBUG_BUILD_DATE __DATE__ " " __TIME__
 
 // 紫屏错误代码定义
@@ -1800,11 +1801,11 @@ static DWORD lastScrollTime = 0;
 // 系统信息变量
 static SYSTEM_INFO sysInfo;
 static MEMORYSTATUSEX memoryStatus;
-static char osVersion[100] = "fOS 1.0 Professional (Build 400) codename nori";
-static char cpuInfo[100] = "f系统1.0专用处理器";
+static char osVersion[100] = "fOS 0.0 Professional (Build 01b) codename nori";
+static char cpuInfo[100] = "f系统0.0专用处理器";
 static char memoryInfo[100] = "版权归Jellyfish Studio所有（2020-2030），严禁二次分发！";
-static char buildInfo[100] = "Build 400 (fOS.1.0.Professional)";
-static char versionInfo[200] = "fOS 1.0 Professional\n版本 1.0.400.2025\n编译于 2025年";
+static char buildInfo[100] = "Build 01b (fOS.0.0.Professional)";
+static char versionInfo[200] = "fOS 0.0 Professional\n版本 0.0.01b.2025\n编译于 2025年";
 static DWORD lastSystemInfoUpdate = 0;
 
 // 文件管理器变量 - 改为真实文件操作
@@ -1920,11 +1921,6 @@ static Theme themes[] = {
 static int currentThemeIndex = 0;
 static int currentField = 0; // Bug报告软件当前输入字段
 
-// 版本信息
-#define MAJOR_VERSION 1
-#define MINOR_VERSION 0
-#define BUILD_VERSION 400
-#define RELEASE_YEAR 2025
 
 // 配置文件路径
 #define CONFIG_FILE "f系统配置.dat"
@@ -4542,11 +4538,11 @@ static void sl_UpdateSunlightState(void) {
         }
         if (now - g_sunlight.loadTextChangeTime > 300) {
             const char* texts[] = {
-                "正在数水母...", "编译阳光中...", "连接水母服务器...",
-                "检查今天有没有Bug...", "给水母喂食...", "查看谁在偷看代码...",
-                "正在生成好心情...", "水母正在游泳...", "正在播放启动音乐...",
-                "整理代码中...", "给水母打气...", "正在加载阳光...",
-                "检查版本中...", "水母更新成功", "准备进入桌面..."
+                u8"正在数水母...", u8"编译阳光中...", "连接水母服务器...",
+                u8"检查今天有没有Bug...", u8"给水母喂食...𪠽", u8"查看谁在偷看代码...",
+                u8"正在生成好心情...", "u8水母正在游泳...", u8"正在播放启动音乐...",
+                u8"整理代码中...", u8"给水母打气...", u8"正在加载阳光...𪠽",
+                u8"检查版本中...𪠽", u8"水母更新成功𪠽", "u8准备进入桌面..."
             };
             g_sunlight.loadTextIndex = (g_sunlight.loadTextIndex + 1) % 15;
             g_sunlight.loadTextChangeTime = now;
@@ -4732,7 +4728,7 @@ void DrawSunlightLauncher(HDC hdc, RECT rect) {
         hof = (HFONT)SelectObject(hdc, hvf);
         SetTextColor(hdc, RGB(148, 163, 184));
         char ver[100];
-        sprintf(ver, "v1.0.400 · sunlight-edition");
+        sprintf(ver, "v0.0.01b · sunlight-edition");
         TextOutA(hdc, 20, rect.bottom - 40, ver, (int)strlen(ver));
         SelectObject(hdc, hof);
         DeleteObject(hvf);
@@ -6282,7 +6278,7 @@ void DrawSettingsStep(HDC hdc, int centerX, int centerY) {
             TextOut(hdc, centerX - 120, centerY - 10, computerName, strlen(computerName));
             
             TextOut(hdc, centerX - 200, centerY + 30, "系统版本:", 8);
-            TextOut(hdc, centerX - 120, centerY + 30, "fOS 1.0 Professional codename nori", 34);
+            TextOut(hdc, centerX - 120, centerY + 30, "fOS 0.0 Professional codename nori", 34);
             
             if (settingsError) {
                 SetTextColor(hdc, VISTA_RED);
@@ -7928,7 +7924,7 @@ void DrawCredits(HDC hdc, int centerX, int centerY) {
         "感谢所有测试过f系统的朋友们",
         "感谢每一个发现彩蛋的探索者",
         "项目历时近一年，终于圆满完成",
-        "f系统1.0 Professional - 梦想成真",
+        "f系统0.0 Professional - 梦想成真",
 		"我们只能知道fos的爸爸是谁，但却无法知道fos的妈妈是谁" 
     };
     
@@ -9600,11 +9596,11 @@ void TriggerDebugPurpleScreen(HWND hwnd, DWORD errorCode, const char* errorMsg, 
 // 初始化版本信息
 void InitializeVersionInfo() {
     if (isActivated) {
-        sprintf(osVersion, "fOS %d.%d Professional (Build 400) - 已激活", MAJOR_VERSION, MINOR_VERSION);
+        sprintf(osVersion, "fOS %d.%d Professional (Build 01b) - 已激活", MAJOR_VERSION, MINOR_VERSION);
     } else if (isTrialMode) {
-        sprintf(osVersion, "fOS %d.%d Professional (Build 400) - 试用版 (%d天)", MAJOR_VERSION, MINOR_VERSION, trialDaysRemaining);
+        sprintf(osVersion, "fOS %d.%d Professional (Build 01b) - 试用版 (%d天)", MAJOR_VERSION, MINOR_VERSION, trialDaysRemaining);
     } else {
-        sprintf(osVersion, "fOS %d.%d Professional (Build 400) - 未激活", MAJOR_VERSION, MINOR_VERSION);
+        sprintf(osVersion, "fOS %d.%d Professional (Build 01b) - 未激活", MAJOR_VERSION, MINOR_VERSION);
     }
     
     sprintf(buildInfo, "Build %d (fOS.%d.%d.Professional)", BUILD_VERSION, MAJOR_VERSION, MINOR_VERSION);

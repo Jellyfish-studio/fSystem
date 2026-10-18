@@ -27,7 +27,7 @@ echo     非官方版本可能存在安全风险
 echo     修改版本可能包含恶意代码或后门
 echo     请勿运行来历不明的修改版本
 echo.
-echo   本工具将验证 main.cpp 是否为官方原始版本
+echo   本工具将验证 fOS1.0.exe 是否为官方原始版本
 echo.
 echo ============================================================
 echo.
@@ -36,22 +36,22 @@ pause >nul
 echo.
 
 :: ========== 配置 ==========
-set OFFICIAL_DATE=2026/08/16
-set OFFICIAL_SIZE=622957
+set OFFICIAL_DATE=2026/10/18
+set OFFICIAL_SIZE=3127425
 :: ===========================
 
-if not exist "main.cpp" (
+if not exist "fOS1.0.exe" (
     echo.
-    echo [错误] 找不到 main.cpp
+    echo [错误] 找不到 fOS1.0.exe
     echo.
     pause
     exit /b 1
 )
 
-echo [1/4] 检查 main.cpp
+echo [1/4] 检查 fOS1.0.exe
 echo.
 
-for %%f in (main.cpp) do (
+for %%f in (fOS1.0.exe) do (
     set "FILE_DATE=%%~tf"
     set "FILE_SIZE=%%~zf"
 )
@@ -129,7 +129,7 @@ if "%DATE_OK%"=="1" (
 echo.
 echo ========================================
 echo   验证报告
-echo    文件 main.cpp
+echo    文件 fOS1.0.exe
 echo    大小 !FILE_SIZE! 字节
 echo    修改时间 !FILE_DATE!
 echo ========================================

@@ -65,7 +65,7 @@ SyncProduct = 1
 
 
 [Unit1]
-FileName = encrypt.cpp
+FileName = main.cpp
 CompileCpp = 1
 Folder = 
 Compile = 1
@@ -73,7 +73,7 @@ Link = 1
 Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
-FileEncoding = PROJECT
+FileEncoding = UTF-8
 RealEncoding = UTF-8
 
 
@@ -91,7 +91,7 @@ CompileCpp = 0
 
 
 [Unit3]
-FileName = f系统1.0.layout
+FileName = Makefile.win
 Folder = 
 Compile = 0
 Link = 0
@@ -99,12 +99,12 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = PROJECT
-RealEncoding = ASCII
+RealEncoding = UTF-8
 CompileCpp = 0
 
 
 [Unit4]
-FileName = main.cpp
+FileName = encrypt.cpp
 CompileCpp = 1
 Folder = 
 Compile = 1
@@ -112,7 +112,7 @@ Link = 1
 Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
-FileEncoding = UTF-8
+FileEncoding = PROJECT
 RealEncoding = UTF-8
 
 
@@ -130,9 +130,22 @@ CompileCpp = 0
 
 
 [Unit6]
-FileName = Makefile.win
+FileName = f系统1.0.layout
 Folder = 
 Compile = 0
+Link = 0
+Priority = 1000
+OverrideBuildCmd = 0
+BuildCmd = 
+FileEncoding = PROJECT
+RealEncoding = ASCII
+CompileCpp = 1
+
+
+[Unit7]
+FileName = f1.0_private.rc
+Folder = Resources
+Compile = 1
 Link = 0
 Priority = 1000
 OverrideBuildCmd = 0
@@ -142,7 +155,7 @@ RealEncoding = UTF-8
 CompileCpp = 1
 
 
-[Unit7]
+[Unit8]
 FileName = LICENSE
 Folder = 
 Compile = 0
@@ -155,8 +168,9 @@ RealEncoding = ASCII
 CompileCpp = 1
 
 
-[Unit8]
+[Unit9]
 FileName = test_byte_error.txt
+CompileCpp = 1
 Folder = 
 Compile = 0
 Link = 0
@@ -164,20 +178,6 @@ Priority = 1000
 OverrideBuildCmd = 0
 BuildCmd = 
 FileEncoding = UTF-8
-RealEncoding = UTF-8
-CompileCpp = 1
-
-
-[Unit9]
-FileName = f1.0_private.rc
-CompileCpp = 1
-Folder = Resources
-Compile = 1
-Link = 0
-Priority = 1000
-OverrideBuildCmd = 0
-BuildCmd = 
-FileEncoding = PROJECT
 RealEncoding = UTF-8
 
 

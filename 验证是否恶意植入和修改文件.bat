@@ -27,7 +27,7 @@ echo     非官方版本可能存在安全风险
 echo     修改版本可能包含恶意代码或后门
 echo     请勿运行来历不明的修改版本
 echo.
-echo   本工具将验证 fOS1.0.exe 是否为官方原始版本
+echo   本工具将验证 fOS.exe 是否为官方原始版本
 echo.
 echo ============================================================
 echo.
@@ -36,22 +36,22 @@ pause >nul
 echo.
 
 :: ========== 配置 ==========
-set OFFICIAL_DATE=2026/10/18
-set OFFICIAL_SIZE=3127425
+set OFFICIAL_DATE=2026/10/24
+set OFFICIAL_SIZE=3128464
 :: ===========================
 
-if not exist "fOS1.0.exe" (
+if not exist "fOS.exe" (
     echo.
-    echo [错误] 找不到 fOS1.0.exe
+    echo [错误] 找不到 fOS.exe
     echo.
     pause
     exit /b 1
 )
 
-echo [1/4] 检查 fOS1.0.exe
+echo [1/4] 检查 fOS.exe
 echo.
 
-for %%f in (fOS1.0.exe) do (
+for %%f in (fOS.exe) do (
     set "FILE_DATE=%%~tf"
     set "FILE_SIZE=%%~zf"
 )

@@ -49,13 +49,13 @@ echo [7/8] 编译 nu_costfuncs.cc...
 g++ -c nunn-1.56\nunn\nu_costfuncs.cc -o nu_costfuncs.o %INC% %FLAGS%
 if errorlevel 1 goto error
 
-echo [8/8] 链接生成 fOS1.0.exe...
-g++ main.o encrypt.o nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o f1.0_private.res -o "fOS1.0.exe" -mwindows -lwinmm -limm32 -lole32 -lwlanapi -liphlpapi -static -static-libgcc -static-libstdc++
+echo [8/8] 链接生成 fOS.exe...
+g++ main.o encrypt.o nu_mlpnn.o nu_rmlpnn.o nu_perceptron.o nu_hopfieldnn.o nu_costfuncs.o f1.0_private.res -o "fOS.exe" -mwindows -lwinmm -limm32 -lole32 -lwlanapi -liphlpapi -static -static-libgcc -static-libstdc++
 if errorlevel 1 goto error
 
 echo.
 echo ========================================
-echo 编译成功！生成 fOS1.0.exe
+echo 编译成功！生成 fOS.exe
 echo ========================================
 pause
 exit

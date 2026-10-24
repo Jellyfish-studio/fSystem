@@ -204,6 +204,16 @@ void buildProject() {
     }
 }
 
+void runProject() {
+    if (fileExists("fOS.exe")) {
+        std::cout << YELLOW << "[RUN] Running fOS.exe ..." << RESET << std::endl;
+        int result = runBatch("fOS.exe");
+        std::cout << GREEN << "[OK] fOS open complete" << RESET << std::endl;
+    } else {
+        std::cout << RED << "[ERR] fOS.exe not found" << RESET << std::endl;
+    }
+}
+
 void cleanProject() {
     std::cout << YELLOW << "[CLEAN] Cleaning object files..." << RESET << std::endl;
     executeCommand("del /q *.o *.res 2>nul", false);
@@ -621,6 +631,7 @@ void showHelp() {
 
     std::cout << "\n" << BOLD << "[ Build ]" << RESET << std::endl;
     std::cout << "  build           - Build fSystem (calls build.bat)" << RESET << std::endl;
+    std::cout << "  run             - run fSystem (open fOS.exe)" << RESET << std::endl;
     std::cout << "  clean           - Clean object files" << RESET << std::endl;
     std::cout << "  deploy          - clean + build" << RESET << std::endl;
     std::cout << "  release         - Package release to release/" << RESET << std::endl;
@@ -741,6 +752,7 @@ int main() {
 
         // --- Build ---
         if (cmd == "build") buildProject();
+        else if (cmd == "run") runProject();
         else if (cmd == "clean") cleanProject();
         else if (cmd == "deploy") deployProject();
         else if (cmd == "release") releaseProject();

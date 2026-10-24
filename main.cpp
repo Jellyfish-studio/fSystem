@@ -43,11 +43,13 @@
 //27/07/26 12:00:亮度调节真实实现
 //28/07/26 14:00:修复了亮度调节的bug
 //28/07/26 20:08:文件管理器支持PgUp和PgDn进行调整显示行数位置
-//31/07/26 12:01:实现了AI训练器，使用nunn库，但出现了编译器无法编译状况，需使用专门的编译bat文件（跟目录有），暂未支持输入中文（只支持数字），训练文件暂时为存储进本地，版本bete1
+//31/07/26 12:01:实现了AI训练器，使用nunn库，但出现了编译器无法编译状况，需使用专门的编译bat文件（根目录有），暂未支持输入中文（只支持数字），训练文件暂时未存储进本地，版本bete1
 //05/08/26 19:04:时钟回归(任务栏版本bete2),碰撞箱未修复
 //05/08/26 20:11:网络调节真实实现
 //15/08/26 10:46:实现了加密储存配置文件
 //18/10/26 13:50:将版本号改成0.0.01b
+//18/10/26 11:00:将开始菜单命名为"Just To Do!"
+//18/10/26 11:00:更改了安装向导幻灯片内容
 
 #include <windows.h>
 #include <string.h>
@@ -464,66 +466,66 @@ typedef struct {
 } InstallSlide;
 
 static const InstallSlide g_slides[INSTALL_SLIDE_COUNT] = {
-    {"欢迎来到水母工作室",
-     "欢迎使用 Jellyfish Studio 阳间版系统。\n这里没有惊吓，没有隐藏机制，没有会在凌晨三点自动触发的彩蛋。\n这里只有一只温和的水母，和一个你可以放心打开的桌面。",
-     "正在初始化水母引擎...", 5},
-    {"水母启动引擎",
-     "每次开机，水母都会从屏幕中央浮现。\n带着柔和的光晕，缓缓出现在您面前。\n它不会突然跳出来吓您。\n它只是安静地漂浮在那里，告诉您：系统已就绪。",
-     "正在加载水母动画模块...", 10},
-    {"字母弹动系统",
-     "J E L L Y F I S H —— 九个字母，九个独立的灵魂。\n它们会按顺序弹出，每一个都精准落回原位。\n如果您看到某个字母提前跳出来，那不是错误。\n那是它在跟您打招呼。",
-     "正在部署字母弹动引擎...", 15},
-    {"守慧吉祥物",
-     "守慧是一只黄色的水母吉祥物。\n它长得不算好看，但它很努力。\n它不会说话，也不会动。但它一直在那里。\n您在界面上看到它，就知道您还在自己的系统里。",
-     "正在安装守慧吉祥物...", 20},
-    {"守慧的出现位置",
-     "守慧遍布系统的各个角落：\n· CD-KEY验证界面 · 登录界面 · OOBE设置向导\n· 系统信息窗口 · 文件管理器 · 计算器\n· Bug报告工具 · 系统设置 · 日历\n· 紫屏错误 · 开发历程彩蛋",
-     "正在部署守慧位置数据库...", 25},
-    {"阳间规则",
-     "? 没有隐藏的彩蛋\n? 没有凌晨三点触发机制\n? 没有悄悄修改您的代码\n? 没有暗中记录您的操作习惯\n? 没有\"你确定吗\"的弹窗\n您看到的规则，就是全部的规则。",
-     "正在加载阳间规则集...", 30},
-    {"没有隐藏的惊吓",
-     "这里没有鬼故事。没有突然变色的紫屏。\n没有藏在代码里的神秘变量。\n没有只有特定时间才会出现的字符。\n没有倒计时。\n如果您在晚上十点打开它，它不会问您为什么还没睡。",
-     "正在确认无隐藏机制...", 35},
-    {"夜深了，注意休息",
-     "如果您在凌晨三点打开它，它也不会惊讶。\n它只会显示：\"夜深了，注意休息。\"\n然后安静地启动，等您开始工作。\n它不会记录您熬夜的次数。\n它只是温和地提醒一次，然后继续做它该做的事。",
-     "正在加载夜间问候模块...", 40},
-    {"您可以修改任何东西",
-     "您添加的功能会正常显示。\n您删除的代码不会自己回来。\n您改的启动文本会按您写的样子出现。\n您移动的按钮会停留在您放置的位置。\n不会有一个隐藏进程在后台悄悄把您的改动还原。",
-     "正在部署用户修改权限...", 45},
-    {"错误会被正常显示",
-     "如果系统遇到问题，它会平静地告诉您。\n用清晰的文字，而不是蓝屏或紫屏。\n不会闪烁红色。不会突然关机。\n不会丢出一串十六进制代码让您自己猜。\n它只会停下来，等您确认，然后继续。",
-     "正在安装错误处理系统...", 50},
-    {"音乐随您心情",
-     "您可以放启动音乐，也可以不放。\n没有音乐文件？安静启动，不报错。\n不会弹出\"缺少文件\"的窗口。\n不会闪烁红灯。\n它只会在日志里默默记录一行：\n\"启动音乐未加载，系统正常运行。\"",
-     "正在配置音乐加载器...", 55},
-    {"稳定可靠",
-     "您今天看到的内容，明天还会在。\n不会自己更新规则。不会在深夜添加彩蛋。\n不会修改自己的注释。\n您留下的每行代码，都会保持您离开时的样子。\n它是可预期的、稳定的、不会自己变动的。",
-     "正在锁定系统稳定性...", 60},
-    {"您可以随时离开",
-     "您可以随时打开它。也可以随时关上它。\n关闭系统 —— 它不会感到遗憾。\n切换到阴间版 —— 它不会阻止您。\n删掉整个仓库 —— 它不会自己恢复。\n它只是稳定地运行着，等您下一次回来。",
-     "正在配置退出机制...", 65},
-    {"水母的哲学",
-     "\"代码写累了，休息一下。\"\n\"你做的每一件事都很重要。\"\n\"写代码，也是一种浪漫。\"\n\"你比你想象中更厉害。\"\n\"代码里有你的影子。\"\n\"坚持是最酷的事。\"\n\"保持热爱，奔赴山海。\"",
-     "正在加载水母语录库...", 70},
-    {"我们的承诺",
-     "不会记住您的输入习惯。\n不会记录您用了多少次命令。\n不会在开机的时候提醒您\"您上周输错了七次命令\"。\n它只是温和地漂浮在那里，陪您开始新的一天。",
-     "正在确认隐私承诺...", 75},
-    {"您现在知道全部规则了",
-     "没有隐藏条款。\n没有只能在特定条件下触发的行为。\n没有只有开发者才知道的秘密入口。\n阳间版没有秘密。\n它的全部行为，都写在代码里。",
-     "正在确认规则完整性...", 80},
-    {"准备就绪",
-     "水母引擎已加载。守慧已就位。\n字母弹动系统已部署。阳间规则已确认。\n错误处理系统已安装。音乐系统已配置。\n一切都已准备就绪。",
-     "正在进行最终检查...", 85},
-    {"请记住",
-     "你是开发者。\n你是创作者。\n你是这个系统的主人。\n你写下的每一行代码，都比你想象的更有力量。\n送给你的一句话：Change is constant.--出自GitHub。",
-     "正在写入最终确认...", 88},
-    {"最后的叮嘱",
-     "如果有一天你不想用了，可以删除它。\n如果有一天你想重新开始，可以重新安装它。\n它不会阻止你，不会挽留你，不会记录你离开的时间。\n它只是你创造的一个工具，一个伙伴，一个水母。",
-     "正在完成安装...", 92},
-    {"安装完成",
-     "?? 水母工作室 · 阳间版 已准备就绪。\n\n您现在可以随时打开它。\n也可以随时关上它。\n它不会在意。\n它只是稳定地运行着，等您下一次回来。",
-     "安装完成", 100}
+	{"欢迎！",
+		"感谢您在百忙之中抽空前来测试我们的 fSystem 1.0 bete 1。\n作为我们产品的测试志愿者，您可以先阅读一下《发行标记》。\n我们将引导您完成初始设置，并介绍系统的核心功能。",
+		"正在初始化系统环境...", 5},
+	{"发行标记与系统概述",
+    	"当前版本：fSystem 1.0 bete 1 (代号 nori)，构建日期：2026年10月 | 授权协议：GPLv2\nfSystem并非传统意义上的底层操作系统，而是一个由 C++ 独立编写的图形化桌面外壳。\n本版本仅供测试与学习研究使用。",
+		"正在核对发行标记并加载核心模块...", 10},
+	{"极简交互核心",
+		"全新的开始菜单。\n我们移除了传统的“开始”按钮，将其重命名为 Just To Do。\n这不仅是一个极简的视觉符号，更是系统“Just to do”理念的体现——按下它，直接执行你的意图。",
+		"正在配置 Just To Do 菜单...", 15},
+	{"窗口管理器",
+		"自由、无拘束的窗口。\n系统内置了完整的窗口管理机制。\n所有应用程序均支持自由拖拽移动，并且始终保持在您视野的最前端，操作符合直觉。",
+		"正在部署窗口管理器...", 20},
+	{"快速清理机制",
+		"一键关闭所有软件。\n位于任务栏右下角的“关闭所有软件”按钮，可以瞬间中断所有正在运行的应用程序进程，\n让桌面立刻恢复初始的整洁状态。",
+		"正在绑定快速清理按键...", 25},
+	{"核心应用套件",
+		"系统自带应用程序。\n系统预装了计算器、文件管理器、系统信息查看器、日历、时钟以及 Bug 报告工具。\n所有应用均原生运行，无需额外安装。",
+		"正在注册核心应用套件...", 30},
+	{"文件管理器",
+		"纯命令行交互。\n区别于传统的图形化资源管理器，本系统的文件管理器采用极客风格的纯命令行界面，\n支持 cd、dir、open 等指令，高效且直接。",
+		"正在挂载命令行文件系统...", 35},
+	{"开源代码为您省心",
+		"fSystem 1.0 专业版 完全基于 GPLv2 协议开源。\n您可以自由地阅读、修改和分发本项目的每一行代码。\n没有任何隐藏后门，没有任何加密黑盒，\n您可以亲手编译出完全属于您自己的系统。",
+		"正在校验 GPLv2 开源协议...", 40},
+	{"状态机与底层驱动",
+		"系统底层由严密的状态机驱动。\n每一个窗口、每一项设置、每一段交互，\n均由独立的状态变量进行精确控制。\n确保系统的每一次响应，都处于可预期的稳定状态。",
+		"正在注入底层状态机...", 45},
+	{"核心计算引擎",
+		"内置 Nunn 神经网络库。\n系统集成了超过 54 万行的 AI 神经网络库。\n您可以通过内置的“AI 助手”窗口，进行简单的模型训练与数据预测，所有计算均在本地完成。",
+		"正在链接 Nunn AI 引擎...", 50},
+	{"数据安全与加密",
+		"配置文件安全存储。\n您的系统配置、账户信息及各类本地生成的数据，均通过自研的加密模块（XOR + 位置混淆）进行保护，\n确保本地数据不被轻易窃取或篡改。",
+		"正在部署本地加密模块...", 55},
+	{"主题与个性化",
+		"可定制的系统外观。\n系统内置了默认粉、专业蓝、清新绿、优雅紫四套主题。\n您可以在“系统设置”中随时切换，界面元素将立即重绘。",
+		"正在加载主题引擎...", 60},
+	{"启动与动画",
+		"可预测的开机体验。\n系统拥有统一的启动逻辑，不包含任何隐藏进程或后台静默更新。\n启动画面、音乐及配置，均严格遵循当前软件版本的实际状态。",
+		"正在校验启动动画...", 65},
+	{"异常处理机制",
+		"独有的“紫屏”警告。\n当系统检测到严重错误（如空指针、内存泄漏或文件损坏）时，会触发专属的紫屏错误界面，\n并提供明确的错误代码，方便开发者定位问题。",
+		"正在挂载异常处理内核...", 70},
+	{"DEBUG 与日志系统",
+		"透明化的运行轨迹。\n系统在 DEBUG 模式下会生成 fos_debug.log 日志文件。\n所有关键操作、模块加载及异常捕获，都将被精确记录，供后续分析。",
+		"正在绑定底层日志钩子...", 75},
+	{"原生代码编译",
+		"基于 C++17 构建。\n系统核心由 C++17 编写，通过 MinGW-w64 (g++) 编译并静态链接。\n这意味着系统不依赖庞大的外部运行库，具有极高的便携性。",
+		"正在确认底层构建链路...", 80},
+	{"文件完整性验证",
+		"官方正版校验。\n系统内置了文件修改时间及大小的校验脚本。\n在非官方渠道下载的程序，可能无法通过校验，从而拒绝运行以保护您的设备安全。",
+		"正在进行文件完整性校验...", 85},
+	{"系统兼容性",
+		"运行环境说明。\nfSystem 完全兼容 Windows 10 与 Windows 11 环境。\n同时，我们正在积极研究 PE 环境下的独立启动方案（JellyfishPE），以提供更深度的系统体验。",
+		"正在探测运行环境...", 88},
+	{"准备就绪",
+		"完成设置。\n感谢您的耐心等待。系统已成功初始化。\n现在，请点击左上角的 Just To Do 按钮，开始您的数字世界之旅。",
+		"正在进行最终检查...", 92},
+	{"Just to do",
+		"去创造，去探索。\n不要犹豫，去点击那个 Just To Do，去运行属于你的程序吧。\n如遇任何问题，可在GitHub上提出。\n欢迎来到 fSystem。",
+		"安装完成", 100}
 };
 
 // ==================== DEBUG函数声明 ====================
@@ -3849,209 +3851,209 @@ void BrightnessDown() {
 // ============================================================
 
 static void DrawInstallBackground(HDC hdc, RECT rect) {
-    // 深蓝色渐变背景 - 致敬 Win95 风格
-    for (int y = rect.top; y < rect.bottom; y++) {
-        double ratio = (double)(y - rect.top) / (rect.bottom - rect.top);
-        int r = (int)(11 * (1 - ratio) + 26 * ratio);
-        int g = (int)(26 * (1 - ratio) + 58 * ratio);
-        int b = (int)(58 * (1 - ratio) + 106 * ratio);
-        COLORREF color = RGB(r, g, b);
-        HPEN hPen = CreatePen(PS_SOLID, 1, color);
-        HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-        MoveToEx(hdc, rect.left, y, NULL);
-        LineTo(hdc, rect.right, y);
-        SelectObject(hdc, hOldPen);
-        DeleteObject(hPen);
-    }
+	// ★ 缓存 64 级渐变画刷，只创建一次
+	static HBRUSH hGradBrushes[64] = {0};
+	static BOOL gradInited = FALSE;
+	if (!gradInited) {
+		gradInited = TRUE;
+		for (int i = 0; i < 64; i++) {
+			double t = i / 63.0;
+			int r = (int)(11 + (26 - 11) * t);
+			int g = (int)(26 + (58 - 26) * t);
+			int b = (int)(58 + (106 - 58) * t);
+			hGradBrushes[i] = CreateSolidBrush(RGB(r, g, b));
+		}
+	}
+	
+	int h = rect.bottom - rect.top;
+	if (h <= 0) return;
+	for (int i = 0; i < 64; i++) {
+		int y1 = rect.top + h * i / 64;
+		int y2 = rect.top + h * (i + 1) / 64;
+		if (y2 <= y1) continue;
+		RECT r = {rect.left, y1, rect.right, y2};
+		FillRect(hdc, &r, hGradBrushes[i]);
+	}
 }
 
 static void DrawInstallSlide(HDC hdc, RECT rect) {
-    int cx = (rect.left + rect.right) / 2;
-    int cy = (rect.top + rect.bottom) / 2;
-    
-    // 背景
-    DrawInstallBackground(hdc, rect);
-    
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(255, 255, 255));
-    
-    // ---- 左上角Logo ----
-    HFONT hLogoFont = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    HFONT hOldFont = (HFONT)SelectObject(hdc, hLogoFont);
-    SetTextColor(hdc, RGB(150, 200, 255));
-    TextOut(hdc, 30, 25, "Jellyfish Studio 安装程序，接下来将介绍本系统的特性，请按enter翻页", 66);
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hLogoFont);
-    
-    // ---- 右上角"正在安装"文字 ----
-    HFONT hInstFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    hOldFont = (HFONT)SelectObject(hdc, hInstFont);
-    SetTextColor(hdc, RGB(100, 200, 150));
-    TextOut(hdc, rect.right - 120, 28, "● 正在安装", 10);
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hInstFont);
-    
-    // ---- 幻灯片标题 ----
-    HFONT hTitleFont = CreateFont(40, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
-    hOldFont = (HFONT)SelectObject(hdc, hTitleFont);
-    SetTextColor(hdc, RGB(255, 255, 255));
-    
-    RECT titleRect = {rect.left + 60, rect.top + 80, rect.right - 60, rect.top + 150};
-    DrawTextA(hdc, g_install.slideTitle, -1, &titleRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hTitleFont);
-    
-    // ---- 幻灯片内容 ----
-    HFONT hContentFont = CreateFont(22, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
-    hOldFont = (HFONT)SelectObject(hdc, hContentFont);
-    SetTextColor(hdc, RGB(200, 220, 240));
-    
-    RECT contentRect = {rect.left + 80, rect.top + 170, rect.right - 80, rect.bottom - 140};
-    DrawTextA(hdc, g_install.slideContent, -1, &contentRect, DT_CENTER | DT_WORDBREAK);
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hContentFont);
-    
-    // ---- 底部广告语 ----
-    HFONT hAdFont = CreateFont(18, 0, 0, 0, FW_NORMAL, TRUE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
-    hOldFont = (HFONT)SelectObject(hdc, hAdFont);
-    SetTextColor(hdc, RGB(180, 200, 220));
-    
-    RECT adRect = {rect.left + 60, rect.bottom - 100, rect.right - 60, rect.bottom - 70};
-    DrawTextA(hdc, g_install.adText, -1, &adRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hAdFont);
-    
-    // ---- 幻灯片编号 ----
-    HFONT hNumFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    hOldFont = (HFONT)SelectObject(hdc, hNumFont);
-    SetTextColor(hdc, RGB(120, 160, 200));
-    
-    char numText[64];
-    sprintf(numText, "幻灯片 %d / %d", g_install.currentSlide + 1, INSTALL_SLIDE_COUNT);
-    TextOut(hdc, rect.right - 180, rect.bottom - 95, numText, strlen(numText));
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hNumFont);
-    
-    // ---- 进度条 ----
-    int barX = rect.left + 100;
-    int barY = rect.bottom - 50;
-    int barW = rect.right - rect.left - 200;
-    int barH = 16;
-    
-    // 进度条背景
-    RECT barBg = {barX, barY, barX + barW, barY + barH};
-    HBRUSH hBgBrush = CreateSolidBrush(RGB(40, 60, 90));
-    FillRect(hdc, &barBg, hBgBrush);
-    DeleteObject(hBgBrush);
-    
-    // 进度条填充 (Win95风格块状)
-    int fillW = (int)(barW * g_install.progress / 100.0f);
-    if (fillW > 0) {
-        int blockSize = 8;
-        for (int x = barX; x < barX + fillW; x += blockSize) {
-            int blockW = min(blockSize, barX + fillW - x);
-            double ratio = (double)(x - barX) / barW;
-            int r = (int)(60 + ratio * 100);
-            int g = (int)(180 + ratio * 50);
-            int b = (int)(220 + ratio * 35);
-            COLORREF color = RGB(r, g, b);
-            RECT blockRect = {x, barY + 1, x + blockW - 1, barY + barH - 1};
-            HBRUSH hBlockBrush = CreateSolidBrush(color);
-            FillRect(hdc, &blockRect, hBlockBrush);
-            DeleteObject(hBlockBrush);
-        }
-    }
-    
-    // 进度条边框
-    HPEN hBorderPen = CreatePen(PS_SOLID, 1, RGB(100, 150, 200));
-    HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
-    SelectObject(hdc, GetStockObject(NULL_BRUSH));
-    Rectangle(hdc, barX, barY, barX + barW, barY + barH);
-    SelectObject(hdc, hOldPen);
-    DeleteObject(hBorderPen);
-    
-    // ---- 进度百分比和状态文字 ----
-    HFONT hStatusFont = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    hOldFont = (HFONT)SelectObject(hdc, hStatusFont);
-    SetTextColor(hdc, RGB(160, 190, 220));
-    
-    char statusText[256];
-    sprintf(statusText, "%d%% · %s", g_install.progress, g_install.statusText);
-    TextOut(hdc, barX, barY + barH + 6, statusText, strlen(statusText));
-    
-    if (g_install.isPaused) {
-        SetTextColor(hdc, RGB(255, 200, 100));
-        TextOut(hdc, barX + barW - 140, barY + barH + 6, "? 已暂停 (按空格继续)", 22);
-    }
-    
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hStatusFont);
-    
-    // ---- 右下角守慧吉祥物 ----
-    DrawShouhuiMascot(hdc, rect.right - 80, rect.bottom - 120, 55);
-    
-    // ---- 底部提示文字 ----
-    HFONT hHintFont = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-        DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
-    hOldFont = (HFONT)SelectObject(hdc, hHintFont);
-    SetTextColor(hdc, RGB(80, 120, 160));
-    TextOut(hdc, rect.left + 30, rect.bottom - 25, "空格: 暂停/继续  Enter: 跳过当前页面", 36);
-    SelectObject(hdc, hOldFont);
-    DeleteObject(hHintFont);
+	int cx = (rect.left + rect.right) / 2;
+	int cy = (rect.top + rect.bottom) / 2;
+	
+	// ★ 静态缓存所有 GDI 对象，只创建一次
+	static HFONT hLogoFont = NULL, hInstFont = NULL, hTitleFont = NULL;
+	static HFONT hContentFont = NULL, hAdFont = NULL, hNumFont = NULL;
+	static HFONT hStatusFont = NULL, hHintFont = NULL;
+	static HPEN  hBorderPen = NULL;
+	static HBRUSH hBarBgBrush = NULL;
+	
+	if (!hLogoFont) {
+		hLogoFont    = CreateFont(20, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		hInstFont    = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		hTitleFont   = CreateFont(40, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+		hContentFont = CreateFont(22, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+		hAdFont      = CreateFont(18, 0, 0, 0, FW_NORMAL, TRUE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
+		hNumFont     = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		hStatusFont  = CreateFont(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		hHintFont    = CreateFont(12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+								  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+								  DEFAULT_QUALITY, DEFAULT_PITCH, "Arial");
+		hBorderPen   = CreatePen(PS_SOLID, 1, RGB(100, 150, 200));
+		hBarBgBrush  = CreateSolidBrush(RGB(40, 60, 90));
+	}
+	
+	// 背景
+	DrawInstallBackground(hdc, rect);
+	
+	SetBkMode(hdc, TRANSPARENT);
+	
+	// ---- 左上角Logo ----
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hLogoFont);
+	SetTextColor(hdc, RGB(150, 200, 255));
+	TextOut(hdc, 30, 25, "Jellyfish Studio 安装程序，接下来将介绍本系统的特性，请按enter翻页", 66);
+	
+	// ---- 右上角"正在安装"文字 ----
+	SelectObject(hdc, hInstFont);
+	SetTextColor(hdc, RGB(100, 200, 150));
+	TextOut(hdc, rect.right - 120, 28, "● 正在安装", 10);
+	
+	// ---- 幻灯片标题 ----
+	SelectObject(hdc, hTitleFont);
+	SetTextColor(hdc, RGB(255, 255, 255));
+	RECT titleRect = {rect.left + 60, rect.top + 80, rect.right - 60, rect.top + 150};
+	DrawTextA(hdc, g_install.slideTitle, -1, &titleRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+	
+	// ---- 幻灯片内容 ----
+	SelectObject(hdc, hContentFont);
+	SetTextColor(hdc, RGB(200, 220, 240));
+	RECT contentRect = {rect.left + 80, rect.top + 170, rect.right - 80, rect.bottom - 140};
+	DrawTextA(hdc, g_install.slideContent, -1, &contentRect, DT_CENTER | DT_WORDBREAK);
+	
+	// ---- 底部广告语 ----
+	SelectObject(hdc, hAdFont);
+	SetTextColor(hdc, RGB(180, 200, 220));
+	RECT adRect = {rect.left + 60, rect.bottom - 100, rect.right - 60, rect.bottom - 70};
+	DrawTextA(hdc, g_install.adText, -1, &adRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+	
+	// ---- 幻灯片编号 ----
+	SelectObject(hdc, hNumFont);
+	SetTextColor(hdc, RGB(120, 160, 200));
+	char numText[64];
+	sprintf(numText, "幻灯片 %d / %d", g_install.currentSlide + 1, INSTALL_SLIDE_COUNT);
+	TextOut(hdc, rect.right - 180, rect.bottom - 95, numText, strlen(numText));
+	
+	// ---- 进度条 ----
+	int barX = rect.left + 100;
+	int barY = rect.bottom - 50;
+	int barW = rect.right - rect.left - 200;
+	int barH = 16;
+	
+	// 背景
+	RECT barBg = {barX, barY, barX + barW, barY + barH};
+	FillRect(hdc, &barBg, hBarBgBrush);
+	
+	// ★ 进度条填充：块状渐变，每块动态创建画刷（块数 ~barW/8，比原来少很多）
+	int fillW = (int)(barW * g_install.progress / 100.0f);
+	if (fillW > 0) {
+		int blockSize = 8;
+		for (int x = barX; x < barX + fillW; x += blockSize) {
+			int blockW = min(blockSize, barX + fillW - x);
+			double ratio = (double)(x - barX) / barW;
+			int r = (int)(60 + ratio * 100);
+			int g = (int)(180 + ratio * 50);
+			int b = (int)(220 + ratio * 35);
+			RECT blockRect = {x, barY + 1, x + blockW - 1, barY + barH - 1};
+			HBRUSH hBlockBrush = CreateSolidBrush(RGB(r, g, b));
+			FillRect(hdc, &blockRect, hBlockBrush);
+			DeleteObject(hBlockBrush);
+		}
+	}
+	
+	// 边框
+	HPEN hOldPen = (HPEN)SelectObject(hdc, hBorderPen);
+	SelectObject(hdc, GetStockObject(NULL_BRUSH));
+	Rectangle(hdc, barX, barY, barX + barW, barY + barH);
+	SelectObject(hdc, hOldPen);
+	
+	// ---- 进度百分比和状态文字 ----
+	SelectObject(hdc, hStatusFont);
+	SetTextColor(hdc, RGB(160, 190, 220));
+	char statusText[256];
+	sprintf(statusText, "%d%% · %s", g_install.progress, g_install.statusText);
+	TextOut(hdc, barX, barY + barH + 6, statusText, strlen(statusText));
+	
+	if (g_install.isPaused) {
+		SetTextColor(hdc, RGB(255, 200, 100));
+		TextOut(hdc, barX + barW - 140, barY + barH + 6, "? 已暂停 (按空格继续)", 22);
+	}
+	
+	// ---- 右下角守慧吉祥物 ----
+	DrawShouhuiMascot(hdc, rect.right - 80, rect.bottom - 120, 55);
+	
+	// ---- 底部提示文字 ----
+	SelectObject(hdc, hHintFont);
+	SetTextColor(hdc, RGB(80, 120, 160));
+	TextOut(hdc, rect.left + 30, rect.bottom - 25, "空格: 暂停/继续  Enter: 跳过当前页面", 36);
+	
+	SelectObject(hdc, hOldFont);
 }
 
 // ============================================================
 //  安装引导逻辑函数
 // ============================================================
 
-// 更新安装状态 - 每5秒翻页
+// 更新安装状态 - 每5秒翻页，最后一张停留8秒（5秒显示 + 3秒等待）
 static void UpdateInstallState() {
-    if (!g_install.isInstalling || g_install.isComplete || g_install.isPaused) return;
-    
-    DWORD now = GetTickCount();
-    DWORD elapsed = now - g_install.slideStartTime;
-    
-    // 每张幻灯片停留5秒
-    if (elapsed >= 5000) {
-        g_install.currentSlide++;
-        
-        if (g_install.currentSlide >= INSTALL_SLIDE_COUNT) {
-            g_install.isComplete = TRUE;
-            g_install.isInstalling = FALSE;
-            g_install.progress = 100;
-            DebugLog("安装引导完成，所有幻灯片播放完毕");
-            return;
-        }
-        
-        // 加载下一张幻灯片
-        const InstallSlide* slide = &g_slides[g_install.currentSlide];
-        strcpy(g_install.slideTitle, slide->title);
-        strcpy(g_install.slideContent, slide->content);
-        strcpy(g_install.statusText, slide->status);
-        g_install.progress = slide->progress;
-        g_install.slideStartTime = now;
-        
-        // 更新广告语
-        int adIdx = g_install.currentSlide % AD_COUNT;
-        strcpy(g_install.adText, g_adList[adIdx]);
-        
-        DebugLog("切换到幻灯片 %d: %s (进度: %d%%)", g_install.currentSlide + 1, slide->title, g_install.progress);
-    }
+	if (!g_install.isInstalling || g_install.isComplete || g_install.isPaused) return;
+	
+	DWORD now = GetTickCount();
+	DWORD elapsed = now - g_install.slideStartTime;
+	
+	// ★ 修改：已经是最后一张（进度100%）时，等待 5000 + 3000 = 8000ms 再完成
+	if (g_install.currentSlide >= INSTALL_SLIDE_COUNT - 1) {
+		if (elapsed >= 8000) {
+			g_install.isComplete = TRUE;
+			g_install.isInstalling = FALSE;
+			g_install.progress = 100;
+			DebugLog("安装引导完成（最后一张停留8秒），进度100%%");
+		}
+		return;
+	}
+	
+	// 普通幻灯片每5秒切换
+	if (elapsed >= 5000) {
+		g_install.currentSlide++;
+		
+		// 加载下一张幻灯片
+		const InstallSlide* slide = &g_slides[g_install.currentSlide];
+		strcpy(g_install.slideTitle, slide->title);
+		strcpy(g_install.slideContent, slide->content);
+		strcpy(g_install.statusText, slide->status);
+		g_install.progress = slide->progress;
+		g_install.slideStartTime = now;
+		
+		// 更新广告语
+		int adIdx = g_install.currentSlide % AD_COUNT;
+		strcpy(g_install.adText, g_adList[adIdx]);
+		
+		DebugLog("切换到幻灯片 %d/%d: %s (进度: %d%%)",
+				 g_install.currentSlide + 1, INSTALL_SLIDE_COUNT,
+				 slide->title, g_install.progress);
+	}
 }
 
 // 安装完成回调 - 进入OOBE
@@ -4076,77 +4078,81 @@ static void OnInstallComplete(HWND hwnd) {
     }
 }
 
-// 初始化安装引导
 void InitInstallGuide(HWND hwnd) {
-    ZeroMemory(&g_install, sizeof(InstallState));
-    g_install.isInstalling = TRUE;
-    g_install.isPaused = FALSE;
-    g_install.isComplete = FALSE;
-    g_install.currentSlide = 0;
-    g_install.progress = 5;
-    g_install.slideStartTime = GetTickCount();
-    showInstall = TRUE;
-    
-    // 加载第一张幻灯片
-    const InstallSlide* slide = &g_slides[0];
-    strcpy(g_install.slideTitle, slide->title);
-    strcpy(g_install.slideContent, slide->content);
-    strcpy(g_install.statusText, slide->status);
-    strcpy(g_install.adText, g_adList[0]);
-    
-    DebugLog("安装引导初始化完成，共 %d 张幻灯片，每张5秒", INSTALL_SLIDE_COUNT);
-    
-    if (hwnd) {
-        // 设置定时器更新安装状态 (100ms)
-        SetTimer(hwnd, 98, 100, NULL);
-        InvalidateRect(hwnd, NULL, TRUE);
-        DebugLog("安装引导定时器已设置 (ID: 98)");
-    }
+	ZeroMemory(&g_install, sizeof(InstallState));
+	g_install.isInstalling = TRUE;
+	g_install.isPaused = FALSE;
+	g_install.isComplete = FALSE;
+	g_install.currentSlide = 0;
+	g_install.progress = 5;
+	g_install.slideStartTime = GetTickCount();
+	showInstall = TRUE;
+	
+	const InstallSlide* slide = &g_slides[0];
+	strcpy(g_install.slideTitle, slide->title);
+	strcpy(g_install.slideContent, slide->content);
+	strcpy(g_install.statusText, slide->status);
+	strcpy(g_install.adText, g_adList[0]);
+	
+	DebugLog("安装引导初始化完成，共 %d 张幻灯片，每张5秒", INSTALL_SLIDE_COUNT);
+	
+	if (!hwnd) hwnd = GetActiveWindow();
+	if (!hwnd) hwnd = GetForegroundWindow();
+	
+	if (hwnd) {
+		// ★ 200ms 粒度足够（5秒切换精度 ±200ms 无感），减少一半定时器消息
+		SetTimer(hwnd, 98, 200, NULL);
+		InvalidateRect(hwnd, NULL, TRUE);
+		DebugLog("安装引导定时器已设置 (ID: 98, 200ms), hwnd=%p", hwnd);
+	} else {
+		DebugLog("错误: InitInstallGuide 无法获取窗口句柄，定时器 98 未设置！");
+	}
 }
 
 // 处理安装界面输入
 void HandleInstallInput(char key, HWND hwnd) {
-    if (!g_install.isInstalling) return;
-    
-    if (key == VK_SPACE) {
-        // 空格键暂停/继续
-        g_install.isPaused = !g_install.isPaused;
-        if (!g_install.isPaused) {
-            g_install.slideStartTime = GetTickCount();
-        }
-        InvalidateRect(hwnd, NULL, TRUE);
-        return;
-    }
-    
-    if (key == VK_RETURN) {
-        // Enter键手动切换到下一张
-        if (!g_install.isPaused && !g_install.isComplete) {
-            g_install.currentSlide++;
-            if (g_install.currentSlide >= INSTALL_SLIDE_COUNT) {
-                OnInstallComplete(hwnd);
-                return;
-            }
-            const InstallSlide* slide = &g_slides[g_install.currentSlide];
-            strcpy(g_install.slideTitle, slide->title);
-            strcpy(g_install.slideContent, slide->content);
-            strcpy(g_install.statusText, slide->status);
-            g_install.progress = slide->progress;
-            g_install.slideStartTime = GetTickCount();
-            
-            int adIdx = g_install.currentSlide % AD_COUNT;
-            strcpy(g_install.adText, g_adList[adIdx]);
-            InvalidateRect(hwnd, NULL, TRUE);
-        }
-        return;
-    }
-    
-    if (key == VK_ESCAPE) {
-        // ESC键跳过安装（直接进入OOBE）
-        OnInstallComplete(hwnd);
-        return;
-    }
+	if (!g_install.isInstalling) return;
+	
+	if (key == VK_SPACE) {
+		// 空格键暂停/继续
+		g_install.isPaused = !g_install.isPaused;
+		if (!g_install.isPaused) {
+			g_install.slideStartTime = GetTickCount();
+		}
+		if (hwnd) InvalidateRect(hwnd, NULL, TRUE);
+		return;
+	}
+	
+	if (key == VK_RETURN) {
+		// ★ 修改：Enter 键手动切换到下一张，最后一张直接完成
+		if (!g_install.isPaused && !g_install.isComplete) {
+			if (g_install.currentSlide >= INSTALL_SLIDE_COUNT - 1) {
+				OnInstallComplete(hwnd);
+				return;
+			}
+			
+			g_install.currentSlide++;
+			const InstallSlide* slide = &g_slides[g_install.currentSlide];
+			strcpy(g_install.slideTitle, slide->title);
+			strcpy(g_install.slideContent, slide->content);
+			strcpy(g_install.statusText, slide->status);
+			g_install.progress = slide->progress;
+			g_install.slideStartTime = GetTickCount();
+			
+			int adIdx = g_install.currentSlide % AD_COUNT;
+			strcpy(g_install.adText, g_adList[adIdx]);
+			
+			if (hwnd) InvalidateRect(hwnd, NULL, TRUE);
+		}
+		return;
+	}
+	
+	if (key == VK_ESCAPE) {
+		// ESC键跳过安装（直接进入OOBE）
+		OnInstallComplete(hwnd);
+		return;
+	}
 }
-
 
 // ============================================================
 //  阳间版启动动画 - 完整实现
@@ -9830,49 +9836,51 @@ void DrawCDKeyInterface(HDC hdc, int centerX, int centerY) {
 }
 
 // 处理CD-KEY输入
+// 处理CD-KEY输入
 void HandleCDKeyInput(char key) {
-    if (key == 8) {
-        if (strlen(cdKeyInput) > 0) {
-            cdKeyInput[strlen(cdKeyInput) - 1] = '\0';
-        }
-        cdKeyError = FALSE;
-    } else if (key == 13) {
-        if (ValidateCDKey(cdKeyInput)) {
-            isActivated = TRUE;
-            isTrialMode = FALSE;
-            cdKeyError = FALSE;
-            // 关闭CD-KEY界面，进入安装引导
-            showCDKeyScreen = FALSE;
-            DebugLog("CD-KEY验证成功，启动安装引导");
-            InitInstallGuide(NULL);
-        } else {
-            cdKeyError = TRUE;
-            strcpy(cdKeyErrorMsg, "无效的CD-KEY，请检查后重试");
-        }
-    } else if (key == 27) {
-        // 试用模式 - 也进入安装引导
-        showCDKeyScreen = FALSE;
-        isTrialMode = TRUE;
-        isActivated = FALSE;
-        trialDaysRemaining = 30;
-        ApplyTrialRestrictions();
-        DebugLog("进入试用模式，启动安装引导");
-        InitInstallGuide(NULL);
-    } else if (key >= 32 && key <= 126 && strlen(cdKeyInput) < 29) {
-        int len = strlen(cdKeyInput);
-        
-        // 自动添加分隔符
-        if (len == 5 || len == 11 || len == 17 || len == 23) {
-            cdKeyInput[len] = '-';
-            cdKeyInput[len + 1] = '\0';
-        }
-        
-        cdKeyInput[len] = toupper(key);
-        cdKeyInput[len + 1] = '\0';
-        cdKeyError = FALSE;
-    }
+	if (key == 8) {
+		if (strlen(cdKeyInput) > 0) {
+			cdKeyInput[strlen(cdKeyInput) - 1] = '\0';
+		}
+		cdKeyError = FALSE;
+	} else if (key == 13) {
+		if (ValidateCDKey(cdKeyInput)) {
+			isActivated = TRUE;
+			isTrialMode = FALSE;
+			cdKeyError = FALSE;
+			// 关闭CD-KEY界面，进入安装引导
+			showCDKeyScreen = FALSE;
+			DebugLog("CD-KEY验证成功，启动安装引导");
+			// ★ 修改：传入活动窗口句柄，确保定时器 98 被设置
+			InitInstallGuide(GetActiveWindow());
+		} else {
+			cdKeyError = TRUE;
+			strcpy(cdKeyErrorMsg, "无效的CD-KEY，请检查后重试");
+		}
+	} else if (key == 27) {
+		// 试用模式 - 也进入安装引导
+		showCDKeyScreen = FALSE;
+		isTrialMode = TRUE;
+		isActivated = FALSE;
+		trialDaysRemaining = 30;
+		ApplyTrialRestrictions();
+		DebugLog("进入试用模式，启动安装引导");
+		// ★ 修改：传入活动窗口句柄
+		InitInstallGuide(GetActiveWindow());
+	} else if (key >= 32 && key <= 126 && strlen(cdKeyInput) < 29) {
+		int len = strlen(cdKeyInput);
+		
+		// 自动添加分隔符
+		if (len == 5 || len == 11 || len == 17 || len == 23) {
+			cdKeyInput[len] = '-';
+			cdKeyInput[len + 1] = '\0';
+		}
+		
+		cdKeyInput[len] = toupper(key);
+		cdKeyInput[len + 1] = '\0';
+		cdKeyError = FALSE;
+	}
 }
-
 // 显示CD-KEY界面
 void ShowCDKeyScreen(HWND hwnd) {
     showCDKeyScreen = TRUE;
@@ -13221,13 +13229,13 @@ void DrawStartButton(HDC hdc, int x, int y) {
 	
 	SetBkMode(hdc, TRANSPARENT);
 	
-	// 只显示"开始"文字，不显示Win图标
+	// 只显示"JUST TO DO!"文字
 	HFONT hTextFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
 								 GB2312_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
 								 DEFAULT_QUALITY, DEFAULT_PITCH, "微软雅黑");
 	HFONT hOldFont = (HFONT)SelectObject(hdc, hTextFont);
 	SetTextColor(hdc, RGB(255, 255, 255));
-	TextOut(hdc, btnX + 25, btnY + (btnHeight - 16) / 2 + 1, "开始", 4);
+	TextOut(hdc, btnX + 10, btnY + (btnHeight - 16) / 2 + 1, "JUST TO DO!", 11);
 	
 	SelectObject(hdc, hOldFont);
 	DeleteObject(hTextFont);
@@ -14188,12 +14196,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam) 
 		case WM_TIMER: {
 			if (wParam == 98) {
 				if (g_install.isInstalling && !g_install.isComplete) {
+					// ★ 记录变化前的状态
+					int  prevSlide    = g_install.currentSlide;
+					int  prevProgress = g_install.progress;
+					BOOL prevPaused   = g_install.isPaused;
+					
 					UpdateInstallState();
+					
+					// ★ 只在状态真正变化时才重绘，静止时零重绘
+					BOOL needRedraw = (g_install.currentSlide != prevSlide) ||
+					(g_install.progress     != prevProgress) ||
+					(g_install.isPaused     != prevPaused)   ||
+					g_install.isComplete;
+					
+					if (needRedraw) {
+						InvalidateRect(hwnd, NULL, FALSE);
+					}
+					
 					if (g_install.isComplete) {
 						KillTimer(hwnd, 98);
 						OnInstallComplete(hwnd);
 					}
-					InvalidateRect(hwnd, NULL, FALSE);
 				}
 				break;
 			}
